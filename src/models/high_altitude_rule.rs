@@ -24,6 +24,9 @@ pub enum HighLatitudeRule {
 }
 
 impl HighLatitudeRule {
+    /// Return the recommended [`HighLatitudeRule`] for the given coordinates.
+    /// Locations above 48° latitude use `SeventhOfTheNight`; all others use
+    /// `MiddleOfTheNight`.
     #[must_use]
     pub fn recommended(coordinates: Coordinates) -> Self {
         if coordinates.latitude > 48.0 {

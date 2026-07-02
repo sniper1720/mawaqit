@@ -15,6 +15,10 @@ pub enum Prayer {
 }
 
 impl Prayer {
+    /// Return the English name of this prayer.
+    ///
+    /// On Friday, returns `"Jumua"` for Dhuhr.
+    /// Both `Fajr` and `FajrTomorrow` return `"Fajr"`.
     #[must_use]
     pub fn name(&self) -> String {
         match self {

@@ -111,17 +111,20 @@ impl<Tz: TimeZone> Stride for DateTime<Tz> {
     }
 }
 
+/// A value in degrees, with arithmetic operations and conversion helpers.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub struct Angle {
     pub degrees: f64,
 }
 
 impl Angle {
+    /// Create an [`Angle`] from a value in degrees.
     #[must_use]
     pub fn new(value: f64) -> Self {
         Angle { degrees: value }
     }
 
+    /// Create an [`Angle`] from a value in radians.
     #[must_use]
     pub fn from_radians(value: f64) -> Self {
         Angle {
@@ -129,11 +132,13 @@ impl Angle {
         }
     }
 
+    /// Return the angle converted from degrees to radians.
     #[must_use]
     pub fn radians(&self) -> f64 {
         (self.degrees * PI) / 180.0
     }
 
+    /// Normalize the angle to the range `[0, 360)` degrees.
     #[must_use]
     pub fn unwound(&self) -> Angle {
         Angle {
@@ -141,6 +146,7 @@ impl Angle {
         }
     }
 
+    /// Normalize the angle to the range `[-180, 180]` degrees.
     #[must_use]
     pub fn quadrant_shifted(&self) -> Angle {
         if self.degrees >= -180.0 && self.degrees <= 180.0 {
@@ -205,6 +211,7 @@ pub struct Coordinates {
 }
 
 impl Coordinates {
+    /// Create [`Coordinates`] from latitude and longitude in degrees.
     #[must_use]
     pub fn new(latitude: f64, longitude: f64) -> Self {
         Coordinates {
@@ -215,11 +222,13 @@ impl Coordinates {
 }
 
 impl Coordinates {
+    /// Return the latitude as an `Angle`.
     #[must_use]
     pub fn latitude_angle(&self) -> Angle {
         Angle::new(self.latitude)
     }
 
+    /// Return the longitude as an `Angle`.
     #[must_use]
     pub fn longitude_angle(&self) -> Angle {
         Angle::new(self.longitude)

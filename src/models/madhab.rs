@@ -8,6 +8,8 @@ pub enum Madhab {
 }
 
 impl Madhab {
+    /// Return the shadow-length multiplier used for Asr calculation:
+    /// `1` for Shafi (standard), `2` for Hanafi.
     #[must_use]
     pub const fn shadow(&self) -> i32 {
         *self as i32

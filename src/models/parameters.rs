@@ -6,11 +6,10 @@ use super::prayer::Prayer;
 use super::rounding::Rounding;
 use super::shafaq::Shafaq;
 
-/// Settings that are used for determining
-/// the correct prayer time.
+/// Settings that determine prayer time calculation:
+/// angles, method, madhab, high-latitude rule, rounding, and adjustments.
 ///
-/// It is recommended to use [`Configuration`] to build
-/// the parameters that are needed.
+/// Use [`Configuration`] to build a `Parameters` value ergonomically.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub struct Parameters {
     pub method: Method,
@@ -27,6 +26,8 @@ pub struct Parameters {
 }
 
 impl Parameters {
+    /// Create [`Parameters`] from Fajr and Isha angles, with defaults
+    /// for all other fields. Prefer [`Configuration`] for building.
     #[must_use]
     pub fn new(fajr_angle: f64, isha_angle: f64) -> Parameters {
         Parameters {
@@ -44,6 +45,12 @@ impl Parameters {
         }
     }
 
+    /// Return the night-portion fractions `(fajr, isha)` determined by the
+    /// active [`HighLatitudeRule`].
+    ///
+    /// `MiddleOfTheNight` → `(0.5, 0.5)`
+    /// `SeventhOfTheNight` → `(1/7, 1/7)`
+    /// `TwilightAngle` → `(fajr_angle/60, isha_angle/60)`
     pub fn night_portions(&self) -> (f64, f64) {
         match self.high_latitude_rule {
             HighLatitudeRule::MiddleOfTheNight => (1.0 / 2.0, 1.0 / 2.0),
@@ -52,6 +59,8 @@ impl Parameters {
         }
     }
 
+    /// Return the combined (user + method) time adjustment in minutes
+    /// for the given [`Prayer`].
     pub fn time_adjustments(&self, prayer: Prayer) -> i64 {
         match prayer {
             Prayer::Fajr => self.adjustments.fajr + self.method_adjustments.fajr,
@@ -65,10 +74,7 @@ impl Parameters {
     }
 }
 
-/// A builder for [`Parameters`].
-///
-/// It is recommended that this is used for setting
-/// all parameters that are needed.
+/// Builder for [`Parameters`].
 pub struct Configuration {
     method: Method,
     fajr_angle: f64,
@@ -84,6 +90,7 @@ pub struct Configuration {
 }
 
 impl Configuration {
+    /// Create a [`Configuration`] builder with initial Fajr and Isha angles.
     #[must_use]
     pub fn new(fajr_angle: f64, isha_angle: f64) -> Configuration {
         Configuration {
@@ -101,6 +108,8 @@ impl Configuration {
         }
     }
 
+    /// Convenience method: build [`Parameters`] from a [`Method`] and
+    /// [`Madhab`] in one step, bypassing the builder chain.
     #[must_use]
     pub fn with(method: Method, madhab: Madhab) -> Parameters {
         let mut params = method.parameters();
@@ -109,16 +118,19 @@ impl Configuration {
         params
     }
 
+    /// Set the calculation authority.
     pub fn method(&mut self, method: Method) -> &mut Configuration {
         self.method = method;
         self
     }
 
+    /// Override the method's built-in time adjustments.
     pub fn method_adjustments(&mut self, method_adjustments: TimeAdjustment) -> &mut Configuration {
         self.method_adjustments = method_adjustments;
         self
     }
 
+    /// Choose the rule for approximating Fajr and Isha at high latitudes.
     pub fn high_latitude_rule(
         &mut self,
         high_latitude_rule: HighLatitudeRule,
@@ -127,32 +139,42 @@ impl Configuration {
         self
     }
 
+    /// Set the madhab for Asr shadow-length calculation (Shafi or Hanafi).
     pub fn madhab(&mut self, madhab: Madhab) -> &mut Configuration {
         self.madhab = madhab;
         self
     }
 
+    /// Use a fixed interval (in minutes) from Maghrib for Isha instead of
+    /// a twilight angle. Sets `isha_angle` to 0.
+    /// Used by Umm al-Qura (90 min) and Qatar (90 min).
     pub fn isha_interval(&mut self, isha_interval: i32) -> &mut Configuration {
         self.isha_angle = 0.0;
         self.isha_interval = isha_interval;
         self
     }
 
+    /// Set a custom twilight angle for Maghrib (default: 0° — geometric
+    /// sunset). Used by the Tehran method (4.5°).
     pub fn maghrib_angle(&mut self, angle: f64) -> &mut Configuration {
         self.maghrib_angle = angle;
         self
     }
 
+    /// Set the rounding rule for all computed prayer times.
     pub fn rounding(&mut self, value: Rounding) -> &mut Configuration {
         self.rounding = value;
         self
     }
 
+    /// Set the twilight phenomenon used by the Moonsighting Committee
+    /// method for Isha calculation (General, Ahmer, or Abyad).
     pub fn shafaq(&mut self, value: Shafaq) -> &mut Configuration {
         self.shafaq = value;
         self
     }
 
+    /// Finalise the builder and return the [`Parameters`].
     #[must_use]
     pub fn done(&self) -> Parameters {
         Parameters {

@@ -1,6 +1,4 @@
-//! An Islamic prayer time implementation based on the [Adhan](https://github.com/batoulapps/Adhan) library by Batoul Apps.
-//! While it has a lot of commonalities with the Adhan library, the interface has
-//! been changed slightly to make it more ergonomic and intuitive.
+//! Islamic prayer times for Rust with high-latitude and polar-region support.
 //!
 //! ##### Example
 //!

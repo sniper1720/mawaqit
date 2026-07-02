@@ -13,8 +13,7 @@ use crate::models::parameters::Parameters;
 use crate::models::prayer::Prayer;
 use crate::models::rounding::Rounding;
 
-/// A data struct to hold the timing for all
-/// prayers.
+/// Times of all prayers for a given date, location, and configuration.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub struct PrayerTimes {
     fajr: DateTime<Utc>,
@@ -33,6 +32,8 @@ pub struct PrayerTimes {
 }
 
 impl PrayerTimes {
+    /// Compute all prayer times for the given date, location, and
+    /// configuration.
     pub fn new(date: NaiveDate, coordinates: Coordinates, parameters: Parameters) -> PrayerTimes {
         let prayer_date = date
             .and_hms_opt(0, 0, 0)
@@ -113,6 +114,7 @@ impl PrayerTimes {
         }
     }
 
+    /// Return the UTC [`DateTime`] at which the given [`Prayer`] occurs.
     #[must_use]
     pub fn time(&self, prayer: Prayer) -> DateTime<Utc> {
         match prayer {
@@ -127,11 +129,17 @@ impl PrayerTimes {
         }
     }
 
+    /// Return the [`Prayer`] that is currently in effect.
     #[must_use]
     pub fn current(&self) -> Prayer {
         self.current_time(Utc::now())
     }
 
+    /// Return the UTC [`DateTime`] when the current prayer started.
+    ///
+    /// During the midnight-to-Fajr gap (which falls in the previous
+    /// Islamic day's Isha window), returns yesterday's Isha time so the
+    /// value is always in the past.
     #[must_use]
     pub fn current_prayer_time(&self) -> DateTime<Utc> {
         self.current_prayer_time_from(Utc::now())
@@ -145,6 +153,7 @@ impl PrayerTimes {
         }
     }
 
+    /// Return the [`Prayer`] that begins next.
     #[must_use]
     pub fn next(&self) -> Prayer {
         let now = Utc::now();
@@ -161,6 +170,7 @@ impl PrayerTimes {
         }
     }
 
+    /// Return `(hours, minutes)` until the next prayer starts.
     #[must_use]
     pub fn time_remaining(&self) -> (u32, u32) {
         let next_time = self.time(self.next());
@@ -344,6 +354,7 @@ impl Default for PrayerSchedule {
 }
 
 impl PrayerSchedule {
+    /// Create an empty [`PrayerSchedule`] builder.
     #[must_use]
     pub fn new() -> Self {
         PrayerSchedule {
@@ -353,21 +364,26 @@ impl PrayerSchedule {
         }
     }
 
+    /// Set the date for calculation.
     pub fn on(&mut self, date: NaiveDate) -> &mut PrayerSchedule {
         self.date = Some(date);
         self
     }
 
+    /// Set the geographic coordinates.
     pub fn for_location(&mut self, location: Coordinates) -> &mut PrayerSchedule {
         self.coordinates = Some(location);
         self
     }
 
+    /// Provide [`Parameters`] (method, madhab, adjustments, etc.).
     pub fn with_configuration(&mut self, params: Parameters) -> &mut PrayerSchedule {
         self.params = Some(params);
         self
     }
 
+    /// Compute [`PrayerTimes`]. Returns an error if any required field
+    /// (date, coordinates, parameters) has not been set.
     pub fn calculate(&self) -> Result<PrayerTimes, String> {
         if let (Some(date), Some(coordinates), Some(params)) =
             (self.date, self.coordinates, self.params)

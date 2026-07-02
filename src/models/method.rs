@@ -65,6 +65,7 @@ pub enum Method {
 }
 
 impl Method {
+    /// Build the default [`Parameters`] for this calculation method.
     #[must_use]
     pub fn parameters(&self) -> Parameters {
         match self {

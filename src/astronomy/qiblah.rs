@@ -28,7 +28,7 @@ impl Qiblah {
         Qiblah(Angle::from_radians(term4).unwound().degrees)
     }
 
-    /// Returns the raw direction value in degrees.
+    /// Return the Qibla direction in degrees clockwise from true north.
     #[must_use]
     pub fn value(&self) -> f64 {
         self.0

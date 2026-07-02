@@ -1,3 +1,6 @@
+//! Domain types for prayer time calculation: calculation methods, madhabs,
+//! high-latitude rules, rounding, and time adjustments.
+
 pub mod adjustments;
 pub mod high_altitude_rule;
 pub mod madhab;

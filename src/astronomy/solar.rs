@@ -3,6 +3,8 @@ use chrono::{DateTime, Datelike, TimeZone, Utc};
 use crate::astronomy::ops;
 use crate::astronomy::unit::{Angle, Coordinates, Stride};
 
+/// Geocentric solar coordinates (declination, right ascension, apparent
+/// sidereal time) for a given Julian day.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub struct SolarCoordinates {
     // The declination of the sun, the angle between
