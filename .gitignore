@@ -1,0 +1,8 @@
+# Compiled output
+/target/
+
+# Library lockfile (not needed for libraries)
+Cargo.lock
+
+# rustfmt backups
+**/*.rs.bk

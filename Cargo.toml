@@ -1,0 +1,17 @@
+[package]
+name = "mawaqit"
+version = "0.1.0"
+authors = ["Djalel Oukid <sniper1720@linuxtechmore.com>"]
+edition = "2024"
+description = "Islamic prayer times for Rust with high-latitude & polar-region support."
+documentation = "https://docs.rs/mawaqit/"
+homepage = "https://github.com/sniper1720/mawaqit"
+repository = "https://github.com/sniper1720/mawaqit"
+readme = "README.md"
+license = "MIT"
+rust-version = "1.85"
+keywords = ["prayer", "islam", "salah", "adhan", "muslim"]
+categories = ["date-and-time", "science"]
+
+[dependencies]
+chrono = "0.4.42"
