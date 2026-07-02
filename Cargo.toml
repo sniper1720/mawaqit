@@ -12,6 +12,7 @@ license = "MIT"
 rust-version = "1.85"
 keywords = ["prayer", "islam", "salah", "adhan", "muslim"]
 categories = ["date-and-time", "science"]
+exclude = [".github/", ".gitignore"]
 
 [dependencies]
 chrono = "0.4.42"
