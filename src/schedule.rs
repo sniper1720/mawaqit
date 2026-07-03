@@ -261,7 +261,7 @@ impl PrayerTimes {
             solar_time
                 .sunrise
                 .checked_add_signed(Duration::seconds(-night_fraction as i64))
-                .unwrap()
+                .expect("fajr safe-time computation overflowed")
         };
 
         let mut fajr = solar_time
@@ -274,7 +274,7 @@ impl PrayerTimes {
             fajr = solar_time
                 .sunrise
                 .checked_add_signed(Duration::seconds(-night_fraction))
-                .unwrap();
+                .expect("fajr MoonsightingCommittee night-fraction overflowed");
         }
 
         if fajr < safe_fajr {
@@ -297,7 +297,7 @@ impl PrayerTimes {
             isha = solar_time
                 .sunset
                 .checked_add_signed(Duration::seconds((parameters.isha_interval * 60) as i64))
-                .unwrap();
+                .expect("isha interval-based computation overflowed");
         } else {
             let safe_isha = if parameters.method == Method::MoonsightingCommittee {
                 let day_of_year = prayer_date.ordinal();
@@ -316,7 +316,7 @@ impl PrayerTimes {
                 solar_time
                     .sunset
                     .checked_add_signed(Duration::seconds(night_fraction as i64))
-                    .unwrap()
+                    .expect("isha safe-time computation overflowed")
             };
 
             isha = solar_time
@@ -329,7 +329,7 @@ impl PrayerTimes {
                 isha = solar_time
                     .sunset
                     .checked_add_signed(Duration::seconds(night_fraction))
-                    .unwrap();
+                    .expect("isha MoonsightingCommittee night-fraction overflowed");
             }
 
             if isha > safe_isha {
@@ -351,11 +351,11 @@ impl PrayerTimes {
         let last_third_portion = (night_duration * (2.0 / 3.0)) as i64;
         let middle_of_night = current_maghrib
             .checked_add_signed(Duration::seconds(middle_night_portion))
-            .unwrap()
+            .expect("middle-of-night computation overflowed")
             .rounded_minute(Rounding::Nearest);
         let last_third_of_night = current_maghrib
             .checked_add_signed(Duration::seconds(last_third_portion))
-            .unwrap()
+            .expect("last-third-of-night computation overflowed")
             .rounded_minute(Rounding::Nearest);
 
         (middle_of_night, last_third_of_night, tomorrow_fajr)

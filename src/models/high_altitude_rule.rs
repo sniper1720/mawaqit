@@ -118,31 +118,31 @@ impl HighLatitudeRule {
 
             let isha_time = solar_today.time_for_solar_angle(isha_angle, true);
 
-            let include = if let Some(current) = isha_time {
-                if let Some(prev) = prev_isha {
-                    if prev_was_reachable {
-                        // Both days reachable — exclude if jump > 10 min
-                        let prev_today = date.and_time(prev.time()).and_utc();
-                        let raw_diff = (current - prev_today).num_seconds() as f64 / 60.0;
-                        let diff = if raw_diff.abs() > 720.0 {
-                            let wrapped = if raw_diff > 0.0 {
-                                raw_diff - 1440.0
-                            } else {
-                                raw_diff + 1440.0
-                            };
-                            wrapped.abs()
+            let include = if let Some(current) = isha_time
+                && let Some(prev) = prev_isha
+            {
+                if prev_was_reachable {
+                    // Both days reachable — exclude if jump > 10 min
+                    let prev_today = date.and_time(prev.time()).and_utc();
+                    let raw_diff = (current - prev_today).num_seconds() as f64 / 60.0;
+                    let diff = if raw_diff.abs() > 720.0 {
+                        let wrapped = if raw_diff > 0.0 {
+                            raw_diff - 1440.0
                         } else {
-                            raw_diff.abs()
+                            raw_diff + 1440.0
                         };
-                        diff <= 10.0
+                        wrapped.abs()
                     } else {
-                        // Previous day was unreachable → reappearance day → exclude
-                        false
-                    }
+                        raw_diff.abs()
+                    };
+                    diff <= 10.0
                 } else {
-                    // First reachable day of the year — no baseline to judge
-                    true
+                    // Previous day was unreachable → reappearance day → exclude
+                    false
                 }
+            } else if isha_time.is_some() {
+                // First reachable day of the year — no baseline to judge
+                true
             } else {
                 false
             };
@@ -154,7 +154,7 @@ impl HighLatitudeRule {
                 let night_secs = night.num_seconds() as f64;
                 if night_secs > 0.0 {
                     let isha_len = isha_time
-                        .expect("just checked Some")
+                        .expect("include is only true when isha_time is Some")
                         .signed_duration_since(solar_today.sunset);
                     let ratio = isha_len.num_seconds() as f64 / night_secs;
                     total += ratio;
