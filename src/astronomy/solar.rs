@@ -166,6 +166,80 @@ impl SolarTime {
         }
     }
 
+    /// Attempt to compute solar time data for the given date and coordinates.
+    /// Returns `None` when transit/sunrise/sunset cannot be determined
+    /// (e.g. at polar latitudes where the Sun never rises/sets on that date).
+    pub fn try_new(date: DateTime<Utc>, coordinates: Coordinates) -> Option<SolarTime> {
+        let today = Utc
+            .with_ymd_and_hms(date.year(), date.month(), date.day(), 0, 0, 0)
+            .single()?;
+        let tomorrow = today.tomorrow();
+        let yesterday = today.yesterday();
+        let prev_solar = SolarCoordinates::new(yesterday.julian_day());
+        let solar = SolarCoordinates::new(today.julian_day());
+        let next_solar = SolarCoordinates::new(tomorrow.julian_day());
+        let solar_altitude = Angle::new(-50.0 / 60.0);
+        let approx_transit = ops::approximate_transit(
+            coordinates.longitude_angle(),
+            solar.apparent_sidereal_time,
+            solar.right_ascension,
+        );
+        let transit_time = ops::corrected_transit(
+            approx_transit,
+            coordinates.longitude_angle(),
+            solar.apparent_sidereal_time,
+            solar.right_ascension,
+            prev_solar.right_ascension,
+            next_solar.right_ascension,
+        );
+        let sunrise_time = ops::corrected_hour_angle(
+            approx_transit,
+            solar_altitude,
+            coordinates,
+            false,
+            solar.apparent_sidereal_time,
+            ops::InterpolatedAngle::new(
+                solar.right_ascension,
+                prev_solar.right_ascension,
+                next_solar.right_ascension,
+            ),
+            ops::InterpolatedAngle::new(
+                solar.declination,
+                prev_solar.declination,
+                next_solar.declination,
+            ),
+        );
+        let sunset_time = ops::corrected_hour_angle(
+            approx_transit,
+            solar_altitude,
+            coordinates,
+            true,
+            solar.apparent_sidereal_time,
+            ops::InterpolatedAngle::new(
+                solar.right_ascension,
+                prev_solar.right_ascension,
+                next_solar.right_ascension,
+            ),
+            ops::InterpolatedAngle::new(
+                solar.declination,
+                prev_solar.declination,
+                next_solar.declination,
+            ),
+        );
+
+        Some(SolarTime {
+            date,
+            observer: coordinates,
+            solar,
+            transit: SolarTime::setting_hour(transit_time, &date)?,
+            sunrise: SolarTime::setting_hour(sunrise_time, &date)?,
+            sunset: SolarTime::setting_hour(sunset_time, &date)?,
+            prev_solar,
+            next_solar,
+            approx_transit,
+        })
+    }
+
     /// Compute the time when the Sun reaches the given angle below the horizon.
     /// Set `after_transit` to `true` for times after solar transit (e.g. Isha, sunset),
     /// `false` for times before transit (e.g. Fajr, sunrise).

@@ -51,11 +51,13 @@ impl Parameters {
     /// `MiddleOfTheNight` → `(0.5, 0.5)`
     /// `SeventhOfTheNight` → `(1/7, 1/7)`
     /// `TwilightAngle` → `(fajr_angle/60, isha_angle/60)`
+    /// `LocalRelativeEstimation(pct)` → `(pct, pct)`
     pub fn night_portions(&self) -> (f64, f64) {
         match self.high_latitude_rule {
             HighLatitudeRule::MiddleOfTheNight => (1.0 / 2.0, 1.0 / 2.0),
             HighLatitudeRule::SeventhOfTheNight => (1.0 / 7.0, 1.0 / 7.0),
             HighLatitudeRule::TwilightAngle => (self.fajr_angle / 60.0, self.isha_angle / 60.0),
+            HighLatitudeRule::LocalRelativeEstimation(pct) => (pct, pct),
         }
     }
 
@@ -232,6 +234,16 @@ mod tests {
 
         assert_eq!(params.night_portions().0, 10.0 / 60.0);
         assert_eq!(params.night_portions().1, 15.0 / 60.0);
+    }
+
+    #[test]
+    fn calculated_night_portions_local_relative_estimation() {
+        let params = Configuration::new(18.0, 17.0)
+            .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation(0.35))
+            .done();
+
+        assert!((params.night_portions().0 - 0.35).abs() < 1e-12);
+        assert!((params.night_portions().1 - 0.35).abs() < 1e-12);
     }
 
     #[test]

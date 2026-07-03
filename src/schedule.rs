@@ -8,6 +8,7 @@ use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
 use crate::astronomy::ops;
 use crate::astronomy::solar::SolarTime;
 use crate::astronomy::unit::{Angle, Coordinates, Stride};
+use crate::models::high_altitude_rule::HighLatitudeRule;
 use crate::models::method::Method;
 use crate::models::parameters::Parameters;
 use crate::models::prayer::Prayer;
@@ -48,9 +49,20 @@ impl PrayerTimes {
             .sunrise
             .signed_duration_since(solar_time.sunset);
 
-        let final_fajr =
+        let lre_pct = match parameters.high_latitude_rule {
+            HighLatitudeRule::LocalRelativeEstimation(pct) => Some(pct),
+            _ => None,
+        };
+
+        let final_fajr = if let Some(pct) = lre_pct {
+            PrayerTimes::compute_lre(pct, &parameters, prayer_date, coordinates, 0, false)
+                .adjust_time(parameters.time_adjustments(Prayer::Fajr))
+                .rounded_minute(parameters.rounding)
+        } else {
             PrayerTimes::calculate_fajr(parameters, solar_time, night, coordinates, prayer_date)
-                .rounded_minute(parameters.rounding);
+                .rounded_minute(parameters.rounding)
+        };
+
         let final_sunrise = solar_time
             .sunrise
             .adjust_time(parameters.time_adjustments(Prayer::Sunrise))
@@ -68,9 +80,15 @@ impl PrayerTimes {
         )
         .expect("maghrib adjustment overflowed")
         .rounded_minute(parameters.rounding);
-        let final_isha =
+
+        let final_isha = if let Some(pct) = lre_pct {
+            PrayerTimes::compute_lre(pct, &parameters, prayer_date, coordinates, 0, true)
+                .adjust_time(parameters.time_adjustments(Prayer::Isha))
+                .rounded_minute(parameters.rounding)
+        } else {
             PrayerTimes::calculate_isha(parameters, solar_time, night, coordinates, prayer_date)
-                .rounded_minute(parameters.rounding);
+                .rounded_minute(parameters.rounding)
+        };
 
         // Yesterday's Isha covers the midnight-to-Fajr gap
         let yesterday = prayer_date - Duration::days(1);
@@ -78,24 +96,39 @@ impl PrayerTimes {
         let night_yesterday = solar_time
             .sunrise
             .signed_duration_since(solar_time_yesterday.sunset);
-        let isha_yesterday = PrayerTimes::calculate_isha(
-            parameters,
-            solar_time_yesterday,
-            night_yesterday,
-            coordinates,
-            yesterday,
-        )
-        .rounded_minute(parameters.rounding);
+        let isha_yesterday = if let Some(pct) = lre_pct {
+            PrayerTimes::compute_lre(pct, &parameters, yesterday, coordinates, 0, true)
+                .adjust_time(parameters.time_adjustments(Prayer::Isha))
+                .rounded_minute(parameters.rounding)
+        } else {
+            PrayerTimes::calculate_isha(
+                parameters,
+                solar_time_yesterday,
+                night_yesterday,
+                coordinates,
+                yesterday,
+            )
+            .rounded_minute(parameters.rounding)
+        };
 
-        // Calculate the middle of the night and qiyam times
-        let (final_middle_of_night, final_qiyam, final_fajr_tomorrow) =
-            PrayerTimes::calculate_qiyam(
-                final_maghrib,
+        // Compute tomorrow's Fajr for qiyam (LRE-aware if needed)
+        let tomorrow_fajr = if let Some(pct) = lre_pct {
+            PrayerTimes::compute_lre(pct, &parameters, tomorrow, coordinates, 0, false)
+                .adjust_time(parameters.time_adjustments(Prayer::Fajr))
+                .rounded_minute(parameters.rounding)
+        } else {
+            PrayerTimes::calculate_fajr(
                 parameters,
                 solar_time_tomorrow,
+                night,
                 coordinates,
                 tomorrow,
-            );
+            )
+            .rounded_minute(parameters.rounding)
+        };
+
+        let (final_middle_of_night, final_qiyam, final_fajr_tomorrow) =
+            PrayerTimes::calculate_qiyam(final_maghrib, tomorrow_fajr);
 
         PrayerTimes {
             fajr: final_fajr,
@@ -309,19 +342,8 @@ impl PrayerTimes {
 
     fn calculate_qiyam(
         current_maghrib: DateTime<Utc>,
-        parameters: Parameters,
-        solar_time: SolarTime,
-        coordinates: Coordinates,
-        prayer_date: DateTime<Utc>,
+        tomorrow_fajr: DateTime<Utc>,
     ) -> (DateTime<Utc>, DateTime<Utc>, DateTime<Utc>) {
-        let tomorrow = prayer_date.tomorrow();
-        let solar_time_tomorrow = SolarTime::new(tomorrow, coordinates);
-        let night = solar_time_tomorrow
-            .sunrise
-            .signed_duration_since(solar_time.sunset);
-
-        let tomorrow_fajr =
-            PrayerTimes::calculate_fajr(parameters, solar_time, night, coordinates, prayer_date);
         let night_duration = tomorrow_fajr
             .signed_duration_since(current_maghrib)
             .num_seconds() as f64;
@@ -337,6 +359,137 @@ impl PrayerTimes {
             .rounded_minute(Rounding::Nearest);
 
         (middle_of_night, last_third_of_night, tomorrow_fajr)
+    }
+
+    // ── MWL 2009 Local Relative Estimation helpers ──────────────
+
+    /// Compute LRE-smoothed time for a single prayer on a single date.
+    ///
+    /// Disturbance is detected by a day-to-day jump > 10 minutes
+    /// (per the Arabic definition of اضطراب العلامة) or by the
+    /// angle being unreachable.  The entry ramp steps ±5 min/day
+    /// toward the PCT-based time, and the exit ramp (at reappearance)
+    /// steps in the opposite direction toward the real time.
+    ///
+    /// The sequence is:  Real → Adjusted → PCT → Adjusted → Real.
+    fn compute_lre(
+        pct: f64,
+        params: &Parameters,
+        prayer_date: DateTime<Utc>,
+        coordinates: Coordinates,
+        _depth: u32,
+        is_isha: bool,
+    ) -> DateTime<Utc> {
+        let tomorrow = prayer_date.tomorrow();
+        let solar_time = SolarTime::new(prayer_date, coordinates);
+        let solar_time_tomorrow = SolarTime::new(tomorrow, coordinates);
+        let night = solar_time_tomorrow
+            .sunrise
+            .signed_duration_since(solar_time.sunset);
+
+        let angle = if is_isha {
+            -params.isha_angle
+        } else {
+            -params.fajr_angle
+        };
+        let today_real = solar_time.time_for_solar_angle(Angle::new(angle), is_isha);
+
+        let night_secs = night.num_seconds() as f64;
+        let pct_time = if is_isha {
+            solar_time
+                .sunset
+                .checked_add_signed(Duration::seconds((pct * night_secs) as i64))
+                .expect("LRE pct_isha overflow")
+        } else {
+            solar_time
+                .sunrise
+                .checked_add_signed(Duration::seconds(-(pct * night_secs) as i64))
+                .expect("LRE pct_fajr overflow")
+        };
+
+        // Entry/exit step direction
+        // Entry: toward PCT (Isha −5, Fajr +5)
+        // Exit:  toward real (Isha +5, Fajr −5)
+        let entry_step = if is_isha {
+            Duration::minutes(-5)
+        } else {
+            Duration::minutes(5)
+        };
+        let exit_step = if is_isha {
+            Duration::minutes(5)
+        } else {
+            Duration::minutes(-5)
+        };
+
+        // Minimum distance around the 24h clock (handles midnight wrapping)
+        let clock_dist = |a: DateTime<Utc>, b: DateTime<Utc>| -> f64 {
+            let raw = a.signed_duration_since(b).num_seconds() as f64 / 60.0;
+            let wrapped = if raw >= 720.0 {
+                raw - 1440.0
+            } else if raw <= -720.0 {
+                raw + 1440.0
+            } else {
+                raw
+            };
+            wrapped.abs()
+        };
+
+        // Yesterday's real (for day-to-day disturbance detection)
+        let yesterday = prayer_date - Duration::days(1);
+        let yesterday_solar = SolarTime::new(yesterday, coordinates);
+        let yesterday_real = yesterday_solar.time_for_solar_angle(Angle::new(angle), is_isha);
+
+        // Disturbance: unreachable OR day-to-day jump > 10 min
+        if let (Some(today), Some(yesterday)) = (today_real, yesterday_real) {
+            let y_today = prayer_date
+                .date_naive()
+                .and_time(yesterday.time())
+                .and_utc();
+            if clock_dist(today, y_today) <= 10.0 {
+                return today;
+            }
+        }
+
+        // LRE mode: compute previous day's smoothed value (may recurse)
+        let prev = Self::compute_lre(pct, params, yesterday, coordinates, _depth + 1, is_isha);
+
+        // Normalise prev to today's date so only time-of-day is compared
+        let prev_today = prayer_date.date_naive().and_time(prev.time()).and_utc();
+
+        let was_in_lre = clock_dist(prev_today, pct_time) <= 5.0;
+
+        if let Some(r) = today_real {
+            // Real exists but disturbed → LRE transition (entry or exit)
+            if was_in_lre || clock_dist(prev_today, pct_time) < clock_dist(prev_today, r) {
+                // Closer to PCT → exit toward real (opposite direction)
+                let adjusted = prev_today + exit_step;
+                if clock_dist(adjusted, r) <= 5.0 {
+                    r
+                } else {
+                    adjusted
+                }
+            } else {
+                // Closer to real → entry toward PCT
+                let adjusted = prev_today + entry_step;
+                if clock_dist(adjusted, pct_time) <= 5.0 {
+                    pct_time
+                } else {
+                    adjusted
+                }
+            }
+        } else {
+            // No real → entry toward PCT
+            if was_in_lre {
+                pct_time
+            } else {
+                let adjusted = prev_today + entry_step;
+                if clock_dist(adjusted, pct_time) <= 5.0 {
+                    pct_time
+                } else {
+                    adjusted
+                }
+            }
+        }
     }
 }
 
@@ -402,6 +555,7 @@ impl PrayerSchedule {
 mod tests {
     use super::*;
     use crate::Configuration;
+    use crate::models::high_altitude_rule::HighLatitudeRule;
     use crate::models::madhab::Madhab;
     use chrono::{NaiveDate, TimeZone, Utc};
 
@@ -608,5 +762,75 @@ mod tests {
 
             Err(e) => panic!("calculation failed: {e}"),
         }
+    }
+
+    #[test]
+    fn lre_prayer_times_brussels_summer_solstice() {
+        let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
+        let coordinates = Coordinates::new(50.85, 4.35);
+        let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
+        let lre_rule = HighLatitudeRule::mwl_2009(coordinates, &params);
+
+        let lre_params = Configuration::new(18.0, 17.0)
+            .high_latitude_rule(lre_rule)
+            .done();
+
+        let times = PrayerTimes::new(date, coordinates, lre_params);
+
+        assert!(
+            times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
+            "Fajr must be before Sunrise"
+        );
+        assert!(
+            times.time(Prayer::Sunrise) < times.time(Prayer::Dhuhr),
+            "Sunrise must be before Dhuhr"
+        );
+        assert!(
+            times.time(Prayer::Dhuhr) < times.time(Prayer::Asr),
+            "Dhuhr must be before Asr"
+        );
+        assert!(
+            times.time(Prayer::Asr) < times.time(Prayer::Maghrib),
+            "Asr must be before Maghrib"
+        );
+        assert!(
+            times.time(Prayer::Maghrib) < times.time(Prayer::Isha),
+            "Maghrib must be before Isha"
+        );
+    }
+
+    #[test]
+    fn lre_prayer_times_oslo_winter() {
+        let date = NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid date");
+        let coordinates = Coordinates::new(59.9094, 10.7349);
+        let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
+        let lre_rule = HighLatitudeRule::mwl_2009(coordinates, &params);
+
+        let lre_params = Configuration::new(18.0, 17.0)
+            .high_latitude_rule(lre_rule)
+            .done();
+
+        let times = PrayerTimes::new(date, coordinates, lre_params);
+
+        assert!(
+            times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
+            "Fajr must be before Sunrise"
+        );
+        assert!(
+            times.time(Prayer::Sunrise) < times.time(Prayer::Dhuhr),
+            "Sunrise must be before Dhuhr"
+        );
+        assert!(
+            times.time(Prayer::Dhuhr) < times.time(Prayer::Asr),
+            "Dhuhr must be before Asr"
+        );
+        assert!(
+            times.time(Prayer::Asr) < times.time(Prayer::Maghrib),
+            "Asr must be before Maghrib"
+        );
+        assert!(
+            times.time(Prayer::Maghrib) < times.time(Prayer::Isha),
+            "Maghrib must be before Isha"
+        );
     }
 }
