@@ -221,7 +221,13 @@ pub fn corrected_hour_angle(
     let term1 = angle.radians().sin()
         - (coordinates.latitude_angle().radians().sin() * declination.current.radians().sin());
     let term2 = coordinates.latitude_angle().radians().cos() * declination.current.radians().cos();
-    let term_angle = Angle::from_radians((term1 / term2).acos());
+    let ratio = term1 / term2;
+    // Meeus §14: if |RHS| > 1 the target altitude is never reached.
+    // Return NaN so callers (setting_hour / is_normal) produce None.
+    if ratio.abs() > 1.0 {
+        return f64::NAN;
+    }
+    let term_angle = Angle::from_radians(ratio.acos());
 
     let adjusted_approx_transit = if after_transit {
         approximate_transit + (term_angle.degrees / 360.0)
