@@ -81,8 +81,8 @@ pub struct SolarTime {
     observer: Coordinates,
     solar: SolarCoordinates,
     pub transit: DateTime<Utc>,
-    pub sunrise: DateTime<Utc>,
-    pub sunset: DateTime<Utc>,
+    pub sunrise: Option<DateTime<Utc>>,
+    pub sunset: Option<DateTime<Utc>>,
     prev_solar: SolarCoordinates,
     next_solar: SolarCoordinates,
     approx_transit: f64,
@@ -90,12 +90,16 @@ pub struct SolarTime {
 
 impl SolarTime {
     /// Compute solar time data for the given date and coordinates.
-    pub fn new(date: DateTime<Utc>, coordinates: Coordinates) -> SolarTime {
+    ///
+    /// Returns `Err` when the sun never rises or sets (polar day/night),
+    /// or when solar transit is at or below the geometric horizon
+    /// (no real daylight).
+    pub fn new(date: DateTime<Utc>, coordinates: Coordinates) -> Result<SolarTime, &'static str> {
         // All calculation need to occur at 0h0m UTC
         let today = Utc
             .with_ymd_and_hms(date.year(), date.month(), date.day(), 0, 0, 0)
             .single()
-            .expect("Invalid date received.");
+            .ok_or("invalid date for solar time")?;
         let tomorrow = today.tomorrow();
         let yesterday = today.yesterday();
         let prev_solar = SolarCoordinates::new(yesterday.julian_day());
@@ -115,6 +119,7 @@ impl SolarTime {
             prev_solar.right_ascension,
             next_solar.right_ascension,
         );
+
         let sunrise_time = ops::corrected_hour_angle(
             approx_transit,
             solar_altitude,
@@ -150,90 +155,18 @@ impl SolarTime {
             ),
         );
 
-        SolarTime {
+        Ok(SolarTime {
             date,
             observer: coordinates,
             solar,
             transit: SolarTime::setting_hour(transit_time, &date)
-                .expect("transit time is finite for any valid location on Earth"),
-            sunrise: SolarTime::setting_hour(sunrise_time, &date)
-                .expect("sunrise time is finite for any valid location on Earth"),
-            sunset: SolarTime::setting_hour(sunset_time, &date)
-                .expect("sunset time is finite for any valid location on Earth"),
-            prev_solar,
-            next_solar,
-            approx_transit,
-        }
-    }
-
-    /// Attempt to compute solar time data for the given date and coordinates.
-    /// Returns `None` when transit/sunrise/sunset cannot be determined
-    /// (e.g. at polar latitudes where the Sun never rises/sets on that date).
-    pub fn try_new(date: DateTime<Utc>, coordinates: Coordinates) -> Option<SolarTime> {
-        let today = Utc
-            .with_ymd_and_hms(date.year(), date.month(), date.day(), 0, 0, 0)
-            .single()?;
-        let tomorrow = today.tomorrow();
-        let yesterday = today.yesterday();
-        let prev_solar = SolarCoordinates::new(yesterday.julian_day());
-        let solar = SolarCoordinates::new(today.julian_day());
-        let next_solar = SolarCoordinates::new(tomorrow.julian_day());
-        let solar_altitude = Angle::new(-50.0 / 60.0);
-        let approx_transit = ops::approximate_transit(
-            coordinates.longitude_angle(),
-            solar.apparent_sidereal_time,
-            solar.right_ascension,
-        );
-        let transit_time = ops::corrected_transit(
-            approx_transit,
-            coordinates.longitude_angle(),
-            solar.apparent_sidereal_time,
-            solar.right_ascension,
-            prev_solar.right_ascension,
-            next_solar.right_ascension,
-        );
-        let sunrise_time = ops::corrected_hour_angle(
-            approx_transit,
-            solar_altitude,
-            coordinates,
-            false,
-            solar.apparent_sidereal_time,
-            ops::InterpolatedAngle::new(
-                solar.right_ascension,
-                prev_solar.right_ascension,
-                next_solar.right_ascension,
+                .ok_or("transit computation failed")?,
+            sunrise: Some(
+                SolarTime::setting_hour(sunrise_time, &date).ok_or("sunrise computation failed")?,
             ),
-            ops::InterpolatedAngle::new(
-                solar.declination,
-                prev_solar.declination,
-                next_solar.declination,
+            sunset: Some(
+                SolarTime::setting_hour(sunset_time, &date).ok_or("sunset computation failed")?,
             ),
-        );
-        let sunset_time = ops::corrected_hour_angle(
-            approx_transit,
-            solar_altitude,
-            coordinates,
-            true,
-            solar.apparent_sidereal_time,
-            ops::InterpolatedAngle::new(
-                solar.right_ascension,
-                prev_solar.right_ascension,
-                next_solar.right_ascension,
-            ),
-            ops::InterpolatedAngle::new(
-                solar.declination,
-                prev_solar.declination,
-                next_solar.declination,
-            ),
-        );
-
-        Some(SolarTime {
-            date,
-            observer: coordinates,
-            solar,
-            transit: SolarTime::setting_hour(transit_time, &date)?,
-            sunrise: SolarTime::setting_hour(sunrise_time, &date)?,
-            sunset: SolarTime::setting_hour(sunset_time, &date)?,
             prev_solar,
             next_solar,
             approx_transit,
@@ -262,19 +195,37 @@ impl SolarTime {
             ),
         );
 
-        SolarTime::setting_hour(hours, &self.date)
+        SolarTime::setting_hour(hours, &self.date).filter(|result| {
+            if after_transit {
+                *result > self.transit
+            } else {
+                *result < self.transit
+            }
+        })
     }
 
-    /// Compute the Asr prayer time based on the given shadow length.
-    /// Use `shadow_length = 1.0` for Shafi/standard Asr, `2.0` for Hanafi Asr.
-    pub fn afternoon(&self, shadow_length: f64) -> DateTime<Utc> {
-        let absolute_degrees = (self.observer.latitude - self.solar.declination.degrees).abs();
+    /// Return the Sun's declination at this date.
+    #[must_use]
+    pub fn declination(&self) -> Angle {
+        self.solar.declination
+    }
+
+    /// Calculates the afternoon time when the shadow is `shadow_length` object-heights longer
+    /// than its transit minimum. The two commonly-used values for `shadow_length` are `1.0`
+    /// and `2.0`. Returns `None` if the required shadow is astronomically unattainable on this
+    /// date.
+    #[must_use]
+    pub fn time_for_shadow(&self, shadow_length: f64) -> Option<DateTime<Utc>> {
+        let absolute_degrees = (self.observer.latitude - self.declination().degrees).abs();
         let tangent = Angle::new(absolute_degrees);
         let inverse = shadow_length + tangent.radians().tan();
         let angle = Angle::from_radians((1.0 / inverse).atan());
 
+        if angle.degrees < 0.0 {
+            return None;
+        }
+
         self.time_for_solar_angle(angle, true)
-            .unwrap_or(self.transit)
     }
 
     fn setting_hour(value: f64, date: &DateTime<Utc>) -> Option<DateTime<Utc>> {
@@ -384,14 +335,14 @@ mod tests {
             .with_ymd_and_hms(2015, 7, 12, 0, 0, 0)
             .single()
             .expect("Invalid date and time provided");
-        let solar = SolarTime::new(date, coordinates);
+        let solar = SolarTime::new(date, coordinates).unwrap();
         let transit_date = Utc.with_ymd_and_hms(2015, 7, 12, 17, 20, 0).unwrap();
         let sunrise_date = Utc.with_ymd_and_hms(2015, 7, 12, 10, 8, 0).unwrap();
         let sunset_date = Utc.with_ymd_and_hms(2015, 7, 13, 0, 32, 0).unwrap();
 
         assert_eq!(solar.transit, transit_date);
-        assert_eq!(solar.sunrise, sunrise_date);
-        assert_eq!(solar.sunset, sunset_date);
+        assert_eq!(solar.sunrise, Some(sunrise_date));
+        assert_eq!(solar.sunset, Some(sunset_date));
     }
 
     #[test]
@@ -401,7 +352,7 @@ mod tests {
             .with_ymd_and_hms(2015, 7, 12, 0, 0, 0)
             .single()
             .expect("Invalid date and time provided");
-        let solar = SolarTime::new(date, coordinates);
+        let solar = SolarTime::new(date, coordinates).unwrap();
         let angle = Angle::new(-6.0);
         let twilight_start = solar.time_for_solar_angle(angle, false).unwrap();
         let twilight_end = solar.time_for_solar_angle(angle, true).unwrap();

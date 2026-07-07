@@ -17,6 +17,7 @@
 //! ```
 
 mod astronomy;
+mod methods;
 mod models;
 mod schedule;
 
@@ -26,6 +27,7 @@ pub use crate::models::high_altitude_rule::HighLatitudeRule;
 pub use crate::models::madhab::Madhab;
 pub use crate::models::method::Method;
 pub use crate::models::parameters::{Configuration, Parameters};
+pub use crate::models::polar::PolarFallback;
 pub use crate::models::prayer::Prayer;
 pub use crate::models::rounding::Rounding;
 pub use crate::models::shafaq::Shafaq;
@@ -51,6 +53,8 @@ pub mod prelude {
     #[doc(no_inline)]
     pub use crate::models::parameters::{Configuration, Parameters};
     #[doc(no_inline)]
+    pub use crate::models::polar::PolarFallback;
+    #[doc(no_inline)]
     pub use crate::models::prayer::Prayer;
     #[doc(no_inline)]
     pub use crate::models::rounding::Rounding;
@@ -74,7 +78,7 @@ mod tests {
         let local_date = NaiveDate::from_ymd_opt(2015, 7, 12).expect("Invalid date provided");
         let params = Configuration::with(Method::NorthAmerica, Madhab::Hanafi);
         let coordinates = Coordinates::new(35.7750, -78.6336);
-        let schedule = PrayerTimes::new(local_date, coordinates, params);
+        let schedule = PrayerTimes::try_new(local_date, coordinates, params).unwrap();
 
         assert_eq!(
             schedule.time(Prayer::Fajr).format("%-l:%M %p").to_string(),

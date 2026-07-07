@@ -2,12 +2,13 @@ use super::adjustments::TimeAdjustment;
 use super::high_altitude_rule::HighLatitudeRule;
 use super::madhab::Madhab;
 use super::method::Method;
+use super::polar::PolarFallback;
 use super::prayer::Prayer;
 use super::rounding::Rounding;
 use super::shafaq::Shafaq;
 
 /// Settings that determine prayer time calculation:
-/// angles, method, madhab, high-latitude rule, rounding, and adjustments.
+/// angles, method, madhab, high-latitude rule, rounding, polar fallback, and adjustments.
 ///
 /// Use [`Configuration`] to build a `Parameters` value ergonomically.
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -19,6 +20,7 @@ pub struct Parameters {
     pub isha_interval: i32,
     pub madhab: Madhab,
     pub high_latitude_rule: HighLatitudeRule,
+    pub polar_fallback: PolarFallback,
     pub adjustments: TimeAdjustment,
     pub method_adjustments: TimeAdjustment,
     pub rounding: Rounding,
@@ -38,6 +40,7 @@ impl Parameters {
             isha_interval: 0,
             madhab: Madhab::Shafi,
             high_latitude_rule: HighLatitudeRule::MiddleOfTheNight,
+            polar_fallback: PolarFallback::None,
             adjustments: TimeAdjustment::default(),
             method_adjustments: TimeAdjustment::default(),
             rounding: Rounding::Nearest,
@@ -85,6 +88,7 @@ pub struct Configuration {
     isha_interval: i32,
     madhab: Madhab,
     high_latitude_rule: HighLatitudeRule,
+    polar_fallback: PolarFallback,
     adjustments: TimeAdjustment,
     method_adjustments: TimeAdjustment,
     rounding: Rounding,
@@ -103,6 +107,7 @@ impl Configuration {
             isha_interval: 0,
             madhab: Madhab::Shafi,
             high_latitude_rule: HighLatitudeRule::MiddleOfTheNight,
+            polar_fallback: PolarFallback::None,
             adjustments: TimeAdjustment::default(),
             method_adjustments: TimeAdjustment::default(),
             rounding: Rounding::Nearest,
@@ -147,6 +152,12 @@ impl Configuration {
         self
     }
 
+    /// Set the strategy for handling polar day/night latitudes.
+    pub fn polar_fallback(&mut self, fallback: PolarFallback) -> &mut Configuration {
+        self.polar_fallback = fallback;
+        self
+    }
+
     /// Use a fixed interval (in minutes) from Maghrib for Isha instead of
     /// a twilight angle. Sets `isha_angle` to 0.
     /// Used by Umm al-Qura (90 min) and Qatar (90 min).
@@ -187,6 +198,7 @@ impl Configuration {
             isha_interval: self.isha_interval,
             madhab: self.madhab,
             high_latitude_rule: self.high_latitude_rule,
+            polar_fallback: self.polar_fallback,
             adjustments: self.adjustments,
             method_adjustments: self.method_adjustments,
             rounding: self.rounding,

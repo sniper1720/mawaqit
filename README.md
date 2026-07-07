@@ -34,7 +34,8 @@ let prayers = PrayerSchedule::new()
     .on(date)
     .for_location(brussels)
     .with_configuration(params)
-    .calculate();
+    .calculate()
+    .unwrap();
 ```
 
 ## Initialization parameters
@@ -74,6 +75,7 @@ let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 | `isha_interval`     | `i32`              | Minutes after Maghrib to set Isha (overrides angle when > 0).            |
 | `madhab`            | `Madhab`           | Asr calculation (Shafi or Hanafi).                                       |
 | `high_latitude_rule`| `HighLatitudeRule` | Fallback rule for high latitudes. Default: `MiddleOfTheNight`.           |
+| `polar_fallback`    | `PolarFallback`    | Fallback rule for polar (>66.5°). Default: `None`.                  |
 | `adjustments`       | `TimeAdjustment`   | Custom per-prayer offsets in minutes (user adjustments).                 |
 | `method_adjustments`| `TimeAdjustment`   | Built-in per-prayer offsets from the method preset.                      |
 | `rounding`          | `Rounding`         | Rounding behavior: `Nearest`, `Up`, or `None`.                           |
@@ -97,6 +99,8 @@ Provides preset configuration for calculating prayer times.
 | `Turkey`                 | Diyanet approximation. Less accurate outside Turkey.                                                                             |
 | `Tehran`                 | Institute of Geophysics, University of Tehran. Fajr 17.7°, Isha 14°, Maghrib at 4.5°.                                            |
 | `NorthAmerica`           | ISNA method. Fajr 15°, Isha 15°. MoonsightingCommittee is preferred for NA.                                                      |
+| `France`                 | Union des Organisations Islamiques de France (UOIF). Fajr 12°, Isha 12°.                                                   |
+| `Algeria`                | Algerian Ministry of Religious Affairs. Fajr 18°, Isha 17°, Maghrib +3 min.                                                       |
 | `Other`                  | Defaults to 0° angles. Use for fully custom parameters.                                                                          |
 
 ### Madhab
@@ -131,7 +135,7 @@ Fallback for prayers at polar latitudes (>66.5°) where the sun may not rise or 
 
 | Value              | Description                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `None`             | No polar adjustment. Returns `None` for affected prayers instead of panicking — use for custom fallback or notification. Default.          |
+| `None`             | No polar adjustment. `try_new()` returns `Err` at polar latitudes — use for custom fallback or notification. Default.          |
 | `NearestLatitude`  | Affected prayers calculated using the nearest latitude where astronomical signs are distinguishable. Based on the Board of Grand Scholars of Saudi Arabia and MWL 1986 Resolution 7. |
 | `Reference45`      | Affected prayers calculated using a fixed reference latitude of 45°. Based on MWL 1986 Resolution 7, confirmed by the European Council for Fatwa and Research. |
 

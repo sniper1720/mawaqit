@@ -56,7 +56,10 @@ impl HighLatitudeRule {
     /// scanning a full year (see [`mwl_2009`](HighLatitudeRule::mwl_2009)).
     #[must_use]
     pub fn recommended(coordinates: Coordinates, params: &Parameters) -> Self {
-        if coordinates.latitude.abs() > 48.6 {
+        let abs_lat = coordinates.latitude.abs();
+        if abs_lat > 66.5 {
+            Self::MiddleOfTheNight
+        } else if abs_lat > 48.6 {
             Self::mwl_2009(coordinates, params)
         } else {
             Self::MiddleOfTheNight
@@ -97,7 +100,7 @@ impl HighLatitudeRule {
             let date = jan1 + Duration::days(day_offset);
             let tomorrow = date + Duration::days(1);
 
-            let Some(solar_today) = SolarTime::try_new(
+            let Ok(solar_today) = SolarTime::new(
                 date.and_hms_opt(0, 0, 0).expect("valid time").and_utc(),
                 coordinates,
             ) else {
@@ -105,7 +108,7 @@ impl HighLatitudeRule {
                 prev_was_reachable = false;
                 continue;
             };
-            let Some(solar_tomorrow) = SolarTime::try_new(
+            let Ok(solar_tomorrow) = SolarTime::new(
                 tomorrow.and_hms_opt(0, 0, 0).expect("valid time").and_utc(),
                 coordinates,
             ) else {
@@ -150,12 +153,21 @@ impl HighLatitudeRule {
             if include {
                 let night = solar_tomorrow
                     .sunrise
-                    .signed_duration_since(solar_today.sunset);
+                    .expect("compute_pct only runs where sunrise exists")
+                    .signed_duration_since(
+                        solar_today
+                            .sunset
+                            .expect("compute_pct only runs where sunset exists"),
+                    );
                 let night_secs = night.num_seconds() as f64;
                 if night_secs > 0.0 {
                     let isha_len = isha_time
                         .expect("include is only true when isha_time is Some")
-                        .signed_duration_since(solar_today.sunset);
+                        .signed_duration_since(
+                            solar_today
+                                .sunset
+                                .expect("compute_pct only runs where sunset exists"),
+                        );
                     let ratio = isha_len.num_seconds() as f64 / night_secs;
                     total += ratio;
                     count += 1;
@@ -192,6 +204,17 @@ mod tests {
     #[test]
     fn recommended_rule_middle_of_night_below_48_degrees() {
         let location = Coordinates::new(45.983226, -3.216649);
+        let params = Parameters::new(18.0, 17.0);
+
+        assert_eq!(
+            HighLatitudeRule::recommended(location, &params),
+            HighLatitudeRule::MiddleOfTheNight
+        );
+    }
+
+    #[test]
+    fn recommended_rule_middle_of_night_above_66_degrees() {
+        let location = Coordinates::new(70.0, 20.0);
         let params = Parameters::new(18.0, 17.0);
 
         assert_eq!(

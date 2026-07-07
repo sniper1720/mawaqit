@@ -59,6 +59,15 @@ pub enum Method {
     /// This approximation is less accurate outside the region of Turkey.
     Turkey,
 
+    /// Union des Organisations Islamiques de France (UOIF / ECFR).
+    /// Standard Fajr time with an angle of 12° and Isha time with an angle of 12°.
+    France,
+
+    /// Algerian Ministry of Religious Affairs.
+    /// Standard Fajr time with an angle of 18°, Isha time with an angle of 17°,
+    /// and a +3 minute adjustment for Maghrib.
+    Algeria,
+
     /// Defaults to angles of 0°, should generally be used for making a custom method
     /// and setting your own values.
     Other,
@@ -138,6 +147,13 @@ impl Method {
                         .maghrib(7)
                         .done(),
                 )
+                .done(),
+
+            Self::France => Configuration::new(12.0, 12.0).method(*self).done(),
+
+            Self::Algeria => Configuration::new(18.0, 17.0)
+                .method(*self)
+                .method_adjustments(Adjustment::new().maghrib(3).done())
                 .done(),
 
             Self::Other => Configuration::new(0.0, 0.0).method(*self).done(),
@@ -290,5 +306,28 @@ mod tests {
         assert_eq!(params.fajr_angle, 18.0);
         assert_eq!(params.isha_angle, 17.0);
         assert_eq!(params.isha_interval, 0);
+    }
+
+    #[test]
+    fn parameters_for_france() {
+        let method = Method::France;
+        let params = method.parameters();
+
+        assert_eq!(params.method, Method::France);
+        assert_eq!(params.fajr_angle, 12.0);
+        assert_eq!(params.isha_angle, 12.0);
+        assert_eq!(params.isha_interval, 0);
+    }
+
+    #[test]
+    fn parameters_for_algeria() {
+        let method = Method::Algeria;
+        let params = method.parameters();
+
+        assert_eq!(params.method, Method::Algeria);
+        assert_eq!(params.fajr_angle, 18.0);
+        assert_eq!(params.isha_angle, 17.0);
+        assert_eq!(params.isha_interval, 0);
+        assert_eq!(params.method_adjustments.maghrib, 3);
     }
 }
