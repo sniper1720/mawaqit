@@ -12,7 +12,7 @@ Add `mawaqit` under `[dependencies]` in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mawaqit = "0.1"
+mawaqit = "0.2"
 ```
 
 Then set your location, date, and calculation method to get prayer times:
@@ -27,7 +27,8 @@ let brussels = Coordinates::new(50.85, 4.35);
 let date = NaiveDate::from_ymd_opt(2026, 6, 21).unwrap();
 
 // calculation parameters
-let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
+let mut params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
+params.high_latitude_rule = HighLatitudeRule::Recommended;
 
 // compute prayer times
 let prayers = PrayerSchedule::new()
@@ -121,17 +122,21 @@ Fallback approximations for Fajr and Isha when the sun does not reach the requir
 | `MiddleOfTheNight`  | Fajr won't be earlier than the midpoint of the night; Isha won't be later. Prevents Fajr and Isha from crossing boundaries. Default. |
 | `SeventhOfTheNight` | The night is divided into seven equal parts. Isha begins after the first seventh; Fajr at the beginning of the last seventh. |
 | `TwilightAngle`     | The fajr/isha angle α determines a fraction t = α ÷ 60 of the night. Isha begins after the first t part; Fajr is calculated similarly. Example: 15° → t = 0.25 → Isha after the first quarter of the night. |
-| `LocalRelativeEstimation` | Scans the year to compute the average Fajr/Isha proportion of the night from days where the angle is reachable. Applies that proportion as fallback with ±5 min/day smoothing at transitions. Adopted by MWL Fiqh Council, August 2009. |
+| `LocalRelativeEstimation` | Scans the year to compute the average Fajr/Isha proportion of the night from days where the angle is reachable. Applies that proportion as fallback with ±5 min/day smoothing at transitions. Adopted by MWL Fiqh Council, August 2009. Recommended for Zone 2 (48.6–66.5°). |
 
-Get the recommended rule for a location:
+**Defer to `try_new()`** — set the variant on `params`:
+```rust
+params.high_latitude_rule = HighLatitudeRule::Recommended;
+```
 
+**Inspect directly** — call the static method:
 ```rust
 let rule = HighLatitudeRule::recommended(Coordinates::new(50.85, 4.35));
 ```
 
 ### PolarFallback
 
-Fallback for prayers at polar latitudes (>66.5°) where the sun may not rise or set for extended periods. Fajr, Shuruq, Maghrib, and Isha are affected — Dhuhr and Asr are calculated normally at the actual latitude.
+Fallback for polar latitudes (>66.5°) where the sun may not rise or set for extended periods. All prayer times use the resolved (nearest/reference) latitude.
 
 | Value              | Description                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |

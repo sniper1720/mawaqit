@@ -61,6 +61,7 @@ impl Parameters {
             HighLatitudeRule::SeventhOfTheNight => (1.0 / 7.0, 1.0 / 7.0),
             HighLatitudeRule::TwilightAngle => (self.fajr_angle / 60.0, self.isha_angle / 60.0),
             HighLatitudeRule::LocalRelativeEstimation(pct) => (pct, pct),
+            HighLatitudeRule::Recommended => (1.0 / 2.0, 1.0 / 2.0),
         }
     }
 

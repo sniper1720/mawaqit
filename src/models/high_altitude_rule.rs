@@ -36,6 +36,12 @@ pub enum HighLatitudeRule {
     /// (`isha_length / night_length`), obtained by scanning a full
     /// year across days where the sign is stably present.
     LocalRelativeEstimation(f64),
+
+    /// Deferred variant resolved inside [`PrayerTimes::try_new`].
+    ///
+    /// Evaluated via [`recommended()`](HighLatitudeRule::recommended) against
+    /// the working latitude (original or fallback-resolved).
+    Recommended,
 }
 
 impl HighLatitudeRule {

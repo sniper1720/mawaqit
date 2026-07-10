@@ -43,7 +43,11 @@ fn scan_asr_gaps() {
                         let gap =
                             (times.time(Prayer::Maghrib) - times.time(Prayer::Asr)).num_minutes();
                         let resolved = PolarFallback::NearestLatitude
-                            .resolve_latitude(date.and_hms_opt(0, 0, 0).unwrap().and_utc(), coords)
+                            .resolve_latitude(
+                                date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+                                coords,
+                                Madhab::Shafi,
+                            )
                             .unwrap_or(f64::NAN);
                         println!(
                             "{:>10} {:>7.0} {:>8.3} {:>5} {:>5} {:>5} {:>5} {:>5} {:>5} {:>5}min",
@@ -61,7 +65,11 @@ fn scan_asr_gaps() {
                     }
                     Err(_) => {
                         let resolved = PolarFallback::NearestLatitude
-                            .resolve_latitude(date.and_hms_opt(0, 0, 0).unwrap().and_utc(), coords)
+                            .resolve_latitude(
+                                date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+                                coords,
+                                Madhab::Shafi,
+                            )
                             .unwrap_or(f64::NAN);
                         println!(
                             "{:>10} {:>7.0} {:>8.3}   FAILED",
@@ -91,7 +99,8 @@ fn scan_latitude_stability() {
         for &lat in &lats_north {
             let coords = Coordinates::new(lat, 0.0);
             let prayer_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
-            let resolved = PolarFallback::NearestLatitude.resolve_latitude(prayer_date, coords);
+            let resolved =
+                PolarFallback::NearestLatitude.resolve_latitude(prayer_date, coords, Madhab::Shafi);
             let params = Configuration::new(18.0, 17.0)
                 .method(Method::MuslimWorldLeague)
                 .madhab(Madhab::Shafi)
@@ -117,7 +126,8 @@ fn scan_latitude_stability() {
         for &lat in &lats_south {
             let coords = Coordinates::new(lat, 0.0);
             let prayer_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
-            let resolved = PolarFallback::NearestLatitude.resolve_latitude(prayer_date, coords);
+            let resolved =
+                PolarFallback::NearestLatitude.resolve_latitude(prayer_date, coords, Madhab::Shafi);
             let params = Configuration::new(18.0, 17.0)
                 .method(Method::MuslimWorldLeague)
                 .madhab(Madhab::Shafi)
@@ -437,7 +447,8 @@ fn debug_southern_times() {
     let prayer_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
 
     // Resolved latitude
-    let resolved = PolarFallback::NearestLatitude.resolve_latitude(prayer_date, coords);
+    let resolved =
+        PolarFallback::NearestLatitude.resolve_latitude(prayer_date, coords, Madhab::Shafi);
     println!("Original lat: -70.0, Resolved lat: {:?}", resolved);
 
     // Compute transit at original lat by running try_new and printing individual prayer times

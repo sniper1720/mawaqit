@@ -2,6 +2,7 @@ use chrono::{DateTime, Duration, Utc};
 
 use crate::astronomy::solar::SolarTime;
 use crate::astronomy::unit::Coordinates;
+use crate::models::madhab::Madhab;
 
 /// Strategy for computing prayer times when the sun never rises or sets
 /// (polar day/night above ~66.5° N/S).
@@ -44,32 +45,34 @@ impl PolarFallback {
     /// Returns `None` only for [`PolarFallback::None`] when the original
     /// latitude has no sunrise/sunset (polar day/night).
     #[must_use]
-    pub fn resolve_latitude(self, date: DateTime<Utc>, coordinates: Coordinates) -> Option<f64> {
+    pub fn resolve_latitude(
+        self,
+        date: DateTime<Utc>,
+        coordinates: Coordinates,
+        madhab: Madhab,
+    ) -> Option<f64> {
+        let shadow = madhab.shadow() as f64;
+        let asr_reachable = |st: SolarTime| st.time_for_shadow(shadow).is_some();
+
         match self {
             Self::NearestLatitude => {
                 // Try original latitude first — must have normal sunrise/sunset
                 // and Asr above the geometric horizon.
-                if SolarTime::new(date, coordinates)
-                    .is_ok_and(|st| st.time_for_shadow(1.0).is_some())
-                {
+                if SolarTime::new(date, coordinates).is_ok_and(asr_reachable) {
                     Some(coordinates.latitude)
                 } else {
-                    Some(nearest_working_latitude(date, &coordinates))
+                    Some(nearest_working_latitude(date, &coordinates, shadow))
                 }
             }
             Self::Reference45 => {
-                if SolarTime::new(date, coordinates)
-                    .is_ok_and(|st| st.time_for_shadow(1.0).is_some())
-                {
+                if SolarTime::new(date, coordinates).is_ok_and(asr_reachable) {
                     Some(coordinates.latitude)
                 } else {
                     Some(45.0 * coordinates.latitude.signum())
                 }
             }
             Self::None => {
-                if SolarTime::new(date, coordinates)
-                    .is_ok_and(|st| st.time_for_shadow(1.0).is_some())
-                {
+                if SolarTime::new(date, coordinates).is_ok_and(asr_reachable) {
                     Some(coordinates.latitude)
                 } else {
                     None
@@ -85,8 +88,13 @@ impl PolarFallback {
 /// First tries to find a latitude where yesterday and tomorrow also
 /// work.  If the boundary is too tight (declination shifts ±0.02°/day),
 /// falls back to today-only.
-fn nearest_working_latitude(date: DateTime<Utc>, coords: &Coordinates) -> f64 {
-    fn check(date: DateTime<Utc>, coords: &Coordinates, require_adjacent: bool) -> Option<f64> {
+fn nearest_working_latitude(date: DateTime<Utc>, coords: &Coordinates, shadow: f64) -> f64 {
+    fn check(
+        date: DateTime<Utc>,
+        coords: &Coordinates,
+        shadow: f64,
+        require_adjacent: bool,
+    ) -> Option<f64> {
         let sign = coords.latitude.signum();
         let mut lo = 0.0_f64;
         let mut hi = coords.latitude.abs();
@@ -98,7 +106,7 @@ fn nearest_working_latitude(date: DateTime<Utc>, coords: &Coordinates) -> f64 {
             let test = Coordinates::new(mid * sign, coords.longitude);
 
             let today_ok =
-                SolarTime::new(date, test).is_ok_and(|st| st.time_for_shadow(1.0).is_some());
+                SolarTime::new(date, test).is_ok_and(|st| st.time_for_shadow(shadow).is_some());
 
             let ok = if require_adjacent {
                 today_ok
@@ -119,7 +127,7 @@ fn nearest_working_latitude(date: DateTime<Utc>, coords: &Coordinates) -> f64 {
         if lo > 0.0 { Some(lo * sign) } else { None }
     }
 
-    check(date, coords, true)
-        .or_else(|| check(date, coords, false))
+    check(date, coords, shadow, true)
+        .or_else(|| check(date, coords, shadow, false))
         .unwrap_or(0.0)
 }

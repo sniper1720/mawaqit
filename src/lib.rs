@@ -7,7 +7,8 @@
 //!
 //! let brussels = Coordinates::new(50.85, 4.35);
 //! let date     = NaiveDate::from_ymd_opt(2026, 6, 21).expect("invalid date");
-//! let params   = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
+//! let mut params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
+//! params.high_latitude_rule = HighLatitudeRule::Recommended;
 //! let prayers  = PrayerSchedule::new()
 //!                   .on(date)
 //!                   .for_location(brussels)

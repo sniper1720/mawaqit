@@ -241,16 +241,22 @@ impl SolarTime {
             let adjusted_mins = (calculated_minutes + calculated_seconds / 60.0).round() as u32;
             let adjusted_secs: u32 = 0;
 
-            let (hour, mins, secs) = if adjusted_mins > 59 {
-                (adjusted_hour + 1, 0, adjusted_secs)
+            let (hour, mins, secs, result_date) = if adjusted_mins > 59 {
+                if adjusted_hour >= 23 {
+                    // Minute-rounding can push an already-wrapped hour past
+                    // 23:59 into invalid 24:00. Carry to next day.
+                    (0, 0, adjusted_secs, adjusted_date.tomorrow())
+                } else {
+                    (adjusted_hour + 1, 0, adjusted_secs, adjusted_date)
+                }
             } else {
-                (adjusted_hour, adjusted_mins, adjusted_secs)
+                (adjusted_hour, adjusted_mins, adjusted_secs, adjusted_date)
             };
 
             Utc.with_ymd_and_hms(
-                adjusted_date.year(),
-                adjusted_date.month(),
-                adjusted_date.day(),
+                result_date.year(),
+                result_date.month(),
+                result_date.day(),
                 hour,
                 mins,
                 secs,

@@ -32,7 +32,7 @@ fn main() {
 
     // 2. NearestLatitude (resolved)
     let resolved = PolarFallback::NearestLatitude
-        .resolve_latitude(dt, tromso)
+        .resolve_latitude(dt, tromso, Madhab::Shafi)
         .unwrap();
     times_at(resolved, "NearestLat", date, tromso);
     println!("  → Resolved latitude: {resolved:.6}°");
@@ -68,7 +68,7 @@ fn main() {
     times_at(70.0, "Original 70°", winter, tromso);
 
     let winter_resolved = PolarFallback::NearestLatitude
-        .resolve_latitude(wt, tromso)
+        .resolve_latitude(wt, tromso, Madhab::Shafi)
         .unwrap();
     times_at(winter_resolved, "NearestLat", winter, tromso);
     println!("  → Resolved latitude: {winter_resolved:.6}°");

@@ -40,7 +40,7 @@ impl PrayerTimes {
     pub fn try_new(
         date: NaiveDate,
         coordinates: Coordinates,
-        parameters: Parameters,
+        mut parameters: Parameters,
     ) -> Result<PrayerTimes, &'static str> {
         let prayer_date = date
             .and_hms_opt(0, 0, 0)
@@ -53,7 +53,7 @@ impl PrayerTimes {
         // at a polar latitude where sunrise/sunset don't exist.
         let resolved_lat = parameters
             .polar_fallback
-            .resolve_latitude(prayer_date, coordinates)
+            .resolve_latitude(prayer_date, coordinates, parameters.madhab)
             .ok_or(
                 "polar latitude requires PolarFallback::NearestLatitude or \
                  PolarFallback::Reference45",
@@ -71,6 +71,11 @@ impl PrayerTimes {
             .unwrap()
             .signed_duration_since(solar_ref.sunset.unwrap());
 
+        // Resolve deferred Recommended variant against the working latitude.
+        if parameters.high_latitude_rule == HighLatitudeRule::Recommended {
+            parameters.high_latitude_rule = HighLatitudeRule::recommended(ref_coords, &parameters);
+        }
+
         // LRE has its own MWL 2009 path; others use calculate_fajr/calculate_isha.
         let lre_pct = match parameters.high_latitude_rule {
             HighLatitudeRule::LocalRelativeEstimation(pct) => Some(pct),
@@ -79,7 +84,7 @@ impl PrayerTimes {
 
         // ── Fajr (from reference latitude) ──
         let final_fajr = if let Some(pct) = lre_pct {
-            PrayerTimes::compute_lre(pct, &parameters, prayer_date, ref_coords, 0, false)
+            PrayerTimes::compute_lre(pct, &parameters, prayer_date, ref_coords, false)
                 .adjust_time(parameters.time_adjustments(Prayer::Fajr))
                 .rounded_minute(parameters.rounding)
         } else {
@@ -117,7 +122,7 @@ impl PrayerTimes {
 
         // ── Isha (from reference latitude) ──
         let final_isha = if let Some(pct) = lre_pct {
-            PrayerTimes::compute_lre(pct, &parameters, prayer_date, ref_coords, 0, true)
+            PrayerTimes::compute_lre(pct, &parameters, prayer_date, ref_coords, true)
                 .adjust_time(parameters.time_adjustments(Prayer::Isha))
                 .rounded_minute(parameters.rounding)
         } else {
@@ -131,7 +136,7 @@ impl PrayerTimes {
             .unwrap()
             .signed_duration_since(solar_ref_yesterday.sunset.unwrap());
         let isha_yesterday = if let Some(pct) = lre_pct {
-            PrayerTimes::compute_lre(pct, &parameters, yesterday, ref_coords, 0, true)
+            PrayerTimes::compute_lre(pct, &parameters, yesterday, ref_coords, true)
                 .adjust_time(parameters.time_adjustments(Prayer::Isha))
                 .rounded_minute(parameters.rounding)
         } else {
@@ -147,7 +152,7 @@ impl PrayerTimes {
 
         // ── Tomorrow's Fajr (for qiyam, from ref lat) ──
         let tomorrow_fajr = if let Some(pct) = lre_pct {
-            PrayerTimes::compute_lre(pct, &parameters, tomorrow, ref_coords, 0, false)
+            PrayerTimes::compute_lre(pct, &parameters, tomorrow, ref_coords, false)
                 .adjust_time(parameters.time_adjustments(Prayer::Fajr))
                 .rounded_minute(parameters.rounding)
         } else {
@@ -406,7 +411,6 @@ impl PrayerTimes {
         params: &Parameters,
         prayer_date: DateTime<Utc>,
         coordinates: Coordinates,
-        _depth: u32,
         is_isha: bool,
     ) -> DateTime<Utc> {
         let tomorrow = prayer_date.tomorrow();
@@ -481,7 +485,7 @@ impl PrayerTimes {
         }
 
         // LRE mode: compute previous day's smoothed value (may recurse)
-        let prev = Self::compute_lre(pct, params, yesterday, coordinates, _depth + 1, is_isha);
+        let prev = Self::compute_lre(pct, params, yesterday, coordinates, is_isha);
 
         // Normalise prev to today's date so only time-of-day is compared
         let prev_today = prayer_date.date_naive().and_time(prev.time()).and_utc();
