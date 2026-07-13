@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] — 2026-07-13
+
+### Added
+- Shafaq (twilight variant) is now auto-selected from the chosen Madhab in `Configuration::with()`.
+
 ## [0.2.0] — 2026-07-11
 
 ### Added

@@ -1,6 +1,6 @@
 [package]
 name = "mawaqit"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Djalel Oukid <sniper1720@linuxtechmore.com>"]
 edition = "2024"
 description = "Islamic prayer times for Rust with high-latitude & polar-region support."
