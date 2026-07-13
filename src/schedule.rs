@@ -706,7 +706,7 @@ mod tests {
                 // dhuhr   = 2016-01-31 17:33:00 UTC
                 // asr     = 2016-01-31 20:20:00 UTC
                 // maghrib = 2016-01-31 22:43:00 UTC
-                // isha    = 2016-02-01 00:05:00 UTC
+                // isha    = 2016-01-31 23:46:00 UTC
                 assert_eq!(
                     schedule.time(Prayer::Fajr).format("%-l:%M %p").to_string(),
                     "10:48 AM"
@@ -735,7 +735,7 @@ mod tests {
                 );
                 assert_eq!(
                     schedule.time(Prayer::Isha).format("%-l:%M %p").to_string(),
-                    "12:05 AM"
+                    "11:46 PM"
                 );
             }
 

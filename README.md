@@ -150,9 +150,11 @@ Used by the MoonsightingCommittee method to determine Isha twilight.
 
 | Value     | Description                                                                                         |
 | --------- | --------------------------------------------------------------------------------------------------- |
-| `General` | Combination of Ahmer and Abyad. Default. Reasonable times for higher latitudes.                     |
+| `General` | Combination of Ahmer and Abyad. Reasonable times for higher latitudes.                             |
 | `Ahmer`   | Red twilight. Earlier Isha. Used by Shafi, Maliki, Hanbali.                                         |
 | `Abyad`   | White twilight. Later Isha. Used by Hanafi.                                                         |
+
+> **Note:** Auto-selected from Madhab in `Configuration::with()`. Override with `params.shafaq = ...`.
 
 ```rust
 use mawaqit::Shafaq;

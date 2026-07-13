@@ -122,6 +122,10 @@ impl Configuration {
     pub fn with(method: Method, madhab: Madhab) -> Parameters {
         let mut params = method.parameters();
         params.madhab = madhab;
+        params.shafaq = match madhab {
+            Madhab::Shafi => Shafaq::Ahmer,
+            Madhab::Hanafi => Shafaq::Abyad,
+        };
 
         params
     }
