@@ -70,6 +70,10 @@ impl PrayerTimes {
             .sunrise
             .unwrap()
             .signed_duration_since(solar_ref.sunset.unwrap());
+        let night_yesterday = solar_ref
+            .sunrise
+            .unwrap()
+            .signed_duration_since(solar_ref_yesterday.sunset.unwrap());
 
         // Resolve deferred Recommended variant against the working latitude.
         if parameters.high_latitude_rule == HighLatitudeRule::Recommended {
@@ -88,8 +92,14 @@ impl PrayerTimes {
                 .adjust_time(parameters.time_adjustments(Prayer::Fajr))
                 .rounded_minute(parameters.rounding)
         } else {
-            PrayerTimes::calculate_fajr(parameters, solar_ref, night, ref_coords, prayer_date)
-                .rounded_minute(parameters.rounding)
+            PrayerTimes::calculate_fajr(
+                parameters,
+                solar_ref,
+                night_yesterday,
+                ref_coords,
+                prayer_date,
+            )
+            .rounded_minute(parameters.rounding)
         };
 
         // ── Sunrise (from reference latitude) ──
@@ -131,10 +141,6 @@ impl PrayerTimes {
         };
 
         // ── Yesterday's Isha (covers midnight-to-Fajr gap, from ref lat) ──
-        let night_yesterday = solar_ref
-            .sunrise
-            .unwrap()
-            .signed_duration_since(solar_ref_yesterday.sunset.unwrap());
         let isha_yesterday = if let Some(pct) = lre_pct {
             PrayerTimes::compute_lre(pct, &parameters, yesterday, ref_coords, true)
                 .adjust_time(parameters.time_adjustments(Prayer::Isha))
