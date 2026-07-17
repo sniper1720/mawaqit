@@ -253,16 +253,17 @@ pub fn corrected_hour_angle(
         * coordinates.latitude_angle().radians().cos()
         * adjusted_angles.radians().sin();
 
-    let angle_delta = if term4.abs() < 1e-6 || term_angle.degrees < 1.0 {
-        // Near transit the correction denominator vanishes and the
-        // Newton step becomes unreliable (Meeus p. 102).  Also skip
-        // when the first-pass hour angle is below 1 °RA (~4 min of
-        // time): the altitude curve is too flat for a safe correction.
-        // Return the first-pass acos value directly.
-        0.0
-    } else {
-        term3 / term4
-    };
+    let angle_delta =
+        if term4.abs() < 1e-6 || term_angle.degrees < 1.0 || term_angle.degrees > 179.0 {
+            // Near transit the correction denominator vanishes and the
+            // Newton step becomes unreliable (Meeus p. 102).  Also skip
+            // when the first-pass hour angle is below 1 °RA (~4 min of
+            // time): the altitude curve is too flat for a safe correction.
+            // Return the first-pass acos value directly.
+            0.0
+        } else {
+            term3 / term4
+        };
 
     (adjusted_approx_transit + angle_delta) * 24.0
 }
