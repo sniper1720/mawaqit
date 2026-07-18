@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] — 2026-07-18
+
+### Fixed
+- corrected_hour_angle: add >179° guard to prevent Newton divergence when sin(HA) → 0 at the polar boundary.
+- resolve_latitude: check adjacent days before accepting original latitude to prevent panic on polar reappearance/disappearance day.
+
+### Changed
+- schedule: deduplicate night_yesterday computation.
+
 ## [0.2.1] — 2026-07-13
 
 ### Added
