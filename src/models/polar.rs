@@ -53,26 +53,41 @@ impl PolarFallback {
     ) -> Option<f64> {
         let shadow = madhab.shadow() as f64;
         let asr_reachable = |st: SolarTime| st.time_for_shadow(shadow).is_some();
+        let yesterday = date - Duration::days(1);
+        let tomorrow = date + Duration::days(1);
+
+        // True when the original latitude is not on a reappearance/disappearance
+        // boundary — yesterday and tomorrow also have valid sunrise/sunset.
+        // Mirrors MWL 2009's concept of an *undisturbed* day (see compute_pct).
+        fn undisturbed(
+            date: DateTime<Utc>,
+            yesterday: DateTime<Utc>,
+            tomorrow: DateTime<Utc>,
+            coordinates: Coordinates,
+            asr_reachable: impl Fn(SolarTime) -> bool,
+        ) -> bool {
+            SolarTime::new(date, coordinates).is_ok_and(&asr_reachable)
+                && SolarTime::new(yesterday, coordinates).is_ok()
+                && SolarTime::new(tomorrow, coordinates).is_ok()
+        }
 
         match self {
             Self::NearestLatitude => {
-                // Try original latitude first — must have normal sunrise/sunset
-                // and Asr above the geometric horizon.
-                if SolarTime::new(date, coordinates).is_ok_and(asr_reachable) {
+                if undisturbed(date, yesterday, tomorrow, coordinates, asr_reachable) {
                     Some(coordinates.latitude)
                 } else {
                     Some(nearest_working_latitude(date, &coordinates, shadow))
                 }
             }
             Self::Reference45 => {
-                if SolarTime::new(date, coordinates).is_ok_and(asr_reachable) {
+                if undisturbed(date, yesterday, tomorrow, coordinates, asr_reachable) {
                     Some(coordinates.latitude)
                 } else {
                     Some(45.0 * coordinates.latitude.signum())
                 }
             }
             Self::None => {
-                if SolarTime::new(date, coordinates).is_ok_and(asr_reachable) {
+                if undisturbed(date, yesterday, tomorrow, coordinates, asr_reachable) {
                     Some(coordinates.latitude)
                 } else {
                     None
