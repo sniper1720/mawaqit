@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] — 2026-07-20
+
+### Fixed
+- high_latitude_rule: reject LRE above 66.5° instead of panicking.
+
 ## [0.2.2] — 2026-07-18
 
 ### Fixed

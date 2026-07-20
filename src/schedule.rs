@@ -80,6 +80,15 @@ impl PrayerTimes {
             parameters.high_latitude_rule = HighLatitudeRule::recommended(ref_coords, &parameters);
         }
 
+        // MWL 2009: LRE is defined only for Zone 2 (|latitude| ≤ 66.5°).
+        if matches!(
+            parameters.high_latitude_rule,
+            HighLatitudeRule::LocalRelativeEstimation(_)
+        ) && ref_coords.latitude.abs() > 66.5
+        {
+            return Err("LocalRelativeEstimation not applicable above 66.5° latitude");
+        }
+
         // LRE has its own MWL 2009 path; others use calculate_fajr/calculate_isha.
         let lre_pct = match parameters.high_latitude_rule {
             HighLatitudeRule::LocalRelativeEstimation(pct) => Some(pct),
