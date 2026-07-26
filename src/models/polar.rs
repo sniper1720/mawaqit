@@ -5,7 +5,7 @@ use crate::astronomy::unit::Coordinates;
 use crate::models::madhab::Madhab;
 
 /// Strategy for computing prayer times when the sun never rises or sets
-/// (polar day/night above ~66.5° N/S).
+/// (polar day/night above ~66.6° N/S).
 ///
 /// Only latitude is substituted — original longitude is always kept.
 /// This means two polar cities at the same latitude but different
@@ -25,11 +25,11 @@ pub enum PolarFallback {
 impl PolarFallback {
     /// Return the recommended [`PolarFallback`] for the given coordinates.
     ///
-    /// - `|lat| > 66.5°` → [`NearestLatitude`]
-    /// - `|lat| ≤ 66.5°` → [`None`]
+    /// - `|lat| > 66.6°` → [`NearestLatitude`]
+    /// - `|lat| ≤ 66.6°` → [`None`]
     #[must_use]
     pub fn recommended(coordinates: Coordinates) -> Self {
-        if coordinates.latitude.abs() > 66.5 {
+        if coordinates.latitude.abs() > 66.6 {
             Self::NearestLatitude
         } else {
             Self::None

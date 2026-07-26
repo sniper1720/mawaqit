@@ -51,17 +51,22 @@ impl Parameters {
     /// Return the night-portion fractions `(fajr, isha)` determined by the
     /// active [`HighLatitudeRule`].
     ///
-    /// `MiddleOfTheNight` → `(0.5, 0.5)`
-    /// `SeventhOfTheNight` → `(1/7, 1/7)`
-    /// `TwilightAngle` → `(fajr_angle/60, isha_angle/60)`
-    /// `LocalRelativeEstimation(pct)` → `(pct, pct)`
-    pub fn night_portions(&self) -> (f64, f64) {
+    /// - `MiddleOfTheNight` → `(0.5, 0.5)`
+    /// - `SeventhOfTheNight` → `(1/7, 1/7)`
+    /// - `TwilightAngle` → `(fajr_angle/60, isha_angle/60)`
+    /// - `Recommended` → resolves to MiddleOfTheNight or LRE in [`PrayerTimes::try_new`]
+    /// - `LocalRelativeEstimation` → resolves internally via [`PrayerTimes::try_new`]
+    pub(crate) fn night_portions(&self) -> (f64, f64) {
         match self.high_latitude_rule {
             HighLatitudeRule::MiddleOfTheNight => (1.0 / 2.0, 1.0 / 2.0),
             HighLatitudeRule::SeventhOfTheNight => (1.0 / 7.0, 1.0 / 7.0),
             HighLatitudeRule::TwilightAngle => (self.fajr_angle / 60.0, self.isha_angle / 60.0),
-            HighLatitudeRule::LocalRelativeEstimation(pct) => (pct, pct),
-            HighLatitudeRule::Recommended => (1.0 / 2.0, 1.0 / 2.0),
+            HighLatitudeRule::LocalRelativeEstimation => {
+                unreachable!("LRE resolves in try_new() before night_portions() is called")
+            }
+            HighLatitudeRule::Recommended => {
+                unreachable!("Recommended resolves in try_new() before night_portions() is called")
+            }
         }
     }
 
@@ -256,11 +261,15 @@ mod tests {
     #[test]
     fn calculated_night_portions_local_relative_estimation() {
         let params = Configuration::new(18.0, 17.0)
-            .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation(0.35))
+            .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation)
             .done();
 
-        assert!((params.night_portions().0 - 0.35).abs() < 1e-12);
-        assert!((params.night_portions().1 - 0.35).abs() < 1e-12);
+        // LRE resolves internally — night_portions() is not called for it.
+        // This test verifies the variant can be set without error.
+        assert_eq!(
+            params.high_latitude_rule,
+            HighLatitudeRule::LocalRelativeEstimation
+        );
     }
 
     #[test]

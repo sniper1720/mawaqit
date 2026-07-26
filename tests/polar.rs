@@ -360,7 +360,7 @@ fn builder_polar_fallback_nearest_latitude() {
     assert!(result.is_ok(), "Builder with NearestLatitude should work");
 }
 
-/// PolarFallback::recommended returns NearestLatitude for >66.5°
+/// PolarFallback::recommended returns NearestLatitude for >66.6°
 #[test]
 fn polar_fallback_recommended_above_66() {
     let coords = Coordinates::new(70.0, 20.0);
@@ -370,17 +370,17 @@ fn polar_fallback_recommended_above_66() {
     );
 }
 
-/// PolarFallback::recommended returns None for ≤66.5°
+/// PolarFallback::recommended returns None for ≤66.6°
 #[test]
 fn polar_fallback_recommended_below_66() {
     let coords = Coordinates::new(48.6, 20.0);
     assert_eq!(PolarFallback::recommended(coords), PolarFallback::None);
 }
 
-/// PolarFallback::recommended returns None at exactly 66.5° (boundary, not >)
+/// PolarFallback::recommended returns None at exactly 66.6° (boundary, not >)
 #[test]
 fn polar_fallback_recommended_at_boundary() {
-    let coords = Coordinates::new(66.5, 0.0);
+    let coords = Coordinates::new(66.6, 0.0);
     assert_eq!(PolarFallback::recommended(coords), PolarFallback::None);
 }
 

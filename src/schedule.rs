@@ -77,22 +77,23 @@ impl PrayerTimes {
 
         // Resolve deferred Recommended variant against the working latitude.
         if parameters.high_latitude_rule == HighLatitudeRule::Recommended {
-            parameters.high_latitude_rule = HighLatitudeRule::recommended(ref_coords, &parameters);
+            parameters.high_latitude_rule = HighLatitudeRule::recommended(ref_coords);
         }
 
-        // MWL 2009: LRE is defined only for Zone 2 (|latitude| ≤ 66.5°).
-        if matches!(
-            parameters.high_latitude_rule,
-            HighLatitudeRule::LocalRelativeEstimation(_)
-        ) && ref_coords.latitude.abs() > 66.5
+        // MWL 2009: LRE is defined only for Zone 2 (|latitude| ≤ 66.6°).
+        if parameters.high_latitude_rule == HighLatitudeRule::LocalRelativeEstimation
+            && ref_coords.latitude.abs() > 66.6
         {
-            return Err("LocalRelativeEstimation not applicable above 66.5° latitude");
+            return Err("LocalRelativeEstimation not applicable above 66.6° latitude");
         }
 
         // LRE has its own MWL 2009 path; others use calculate_fajr/calculate_isha.
-        let lre_pct = match parameters.high_latitude_rule {
-            HighLatitudeRule::LocalRelativeEstimation(pct) => Some(pct),
-            _ => None,
+        // Compute the percentage on the fly from a year-long scan.
+        let lre_pct = if parameters.high_latitude_rule == HighLatitudeRule::LocalRelativeEstimation
+        {
+            Some(HighLatitudeRule::compute_pct(ref_coords, &parameters))
+        } else {
+            None
         };
 
         // ── Fajr (from reference latitude) ──
@@ -817,11 +818,9 @@ mod tests {
     fn lre_prayer_times_brussels_summer_solstice() {
         let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
         let coordinates = Coordinates::new(50.85, 4.35);
-        let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
-        let lre_rule = HighLatitudeRule::mwl_2009(coordinates, &params);
 
         let lre_params = Configuration::new(18.0, 17.0)
-            .high_latitude_rule(lre_rule)
+            .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation)
             .done();
 
         let times = PrayerTimes::try_new(date, coordinates, lre_params).unwrap();
@@ -852,14 +851,45 @@ mod tests {
     fn lre_prayer_times_oslo_winter() {
         let date = NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid date");
         let coordinates = Coordinates::new(59.9094, 10.7349);
-        let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
-        let lre_rule = HighLatitudeRule::mwl_2009(coordinates, &params);
 
         let lre_params = Configuration::new(18.0, 17.0)
-            .high_latitude_rule(lre_rule)
+            .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation)
             .done();
 
         let times = PrayerTimes::try_new(date, coordinates, lre_params).unwrap();
+
+        assert!(
+            times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
+            "Fajr must be before Sunrise"
+        );
+        assert!(
+            times.time(Prayer::Sunrise) < times.time(Prayer::Dhuhr),
+            "Sunrise must be before Dhuhr"
+        );
+        assert!(
+            times.time(Prayer::Dhuhr) < times.time(Prayer::Asr),
+            "Dhuhr must be before Asr"
+        );
+        assert!(
+            times.time(Prayer::Asr) < times.time(Prayer::Maghrib),
+            "Asr must be before Maghrib"
+        );
+        assert!(
+            times.time(Prayer::Maghrib) < times.time(Prayer::Isha),
+            "Maghrib must be before Isha"
+        );
+    }
+
+    #[test]
+    fn lre_unit_variant_brussels_july_25() {
+        let date = NaiveDate::from_ymd_opt(2026, 7, 25).expect("valid date");
+        let coordinates = Coordinates::new(50.85, 4.35);
+
+        let params = Configuration::new(18.0, 17.0)
+            .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation)
+            .done();
+
+        let times = PrayerTimes::try_new(date, coordinates, params).unwrap();
 
         assert!(
             times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),

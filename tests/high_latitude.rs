@@ -8,11 +8,8 @@ use mawaqit::prelude::*;
 fn oslo_lre_unchanged() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
     let coords = Coordinates::new(59.9094, 10.7349);
-    let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
-    let lre_rule = HighLatitudeRule::mwl_2009(coords, &params);
-
     let lre_params = Configuration::new(18.0, 17.0)
-        .high_latitude_rule(lre_rule)
+        .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation)
         .done();
 
     let times = PrayerTimes::try_new(date, coords, lre_params).unwrap();
@@ -44,10 +41,8 @@ fn oslo_lre_unchanged() {
 #[test]
 fn lre_ramp_smooth_transition() {
     let coords = Coordinates::new(50.85, 4.35);
-    let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
-    let lre_rule = HighLatitudeRule::mwl_2009(coords, &params);
     let lre_params = Configuration::new(18.0, 17.0)
-        .high_latitude_rule(lre_rule)
+        .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation)
         .done();
 
     let start = NaiveDate::from_ymd_opt(2026, 6, 10).expect("valid date");

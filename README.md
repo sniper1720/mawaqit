@@ -76,7 +76,7 @@ let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 | `isha_interval`     | `i32`              | Minutes after Maghrib to set Isha (overrides angle when > 0).            |
 | `madhab`            | `Madhab`           | Asr calculation (Shafi or Hanafi).                                       |
 | `high_latitude_rule`| `HighLatitudeRule` | Fallback rule for high latitudes. Default: `MiddleOfTheNight`.           |
-| `polar_fallback`    | `PolarFallback`    | Fallback rule for polar (>66.5°). Default: `None`.                  |
+| `polar_fallback`    | `PolarFallback`    | Fallback rule for polar (>66.6°). Default: `None`.                  |
 | `adjustments`       | `TimeAdjustment`   | Custom per-prayer offsets in minutes (user adjustments).                 |
 | `method_adjustments`| `TimeAdjustment`   | Built-in per-prayer offsets from the method preset.                      |
 | `rounding`          | `Rounding`         | Rounding behavior: `Nearest`, `Up`, or `None`.                           |
@@ -122,7 +122,8 @@ Fallback approximations for Fajr and Isha when the sun does not reach the requir
 | `MiddleOfTheNight`  | Fajr won't be earlier than the midpoint of the night; Isha won't be later. Prevents Fajr and Isha from crossing boundaries. Default. |
 | `SeventhOfTheNight` | The night is divided into seven equal parts. Isha begins after the first seventh; Fajr at the beginning of the last seventh. |
 | `TwilightAngle`     | The fajr/isha angle α determines a fraction t = α ÷ 60 of the night. Isha begins after the first t part; Fajr is calculated similarly. Example: 15° → t = 0.25 → Isha after the first quarter of the night. |
-| `LocalRelativeEstimation` | Scans the year to compute the average Fajr/Isha proportion of the night from days where the angle is reachable. Applies that proportion as fallback with ±5 min/day smoothing at transitions. Adopted by MWL Fiqh Council, August 2009. Recommended for Zone 2 (48.6–66.5°). |
+| `LocalRelativeEstimation` | Scans the year to compute the average Fajr/Isha proportion of the night from days where the angle is reachable. Applies that proportion as fallback with ±5 min/day smoothing at transitions. Adopted by MWL Fiqh Council, August 2009. Recommended for Zone 2 (48.6–66.6°). |
+| `Recommended`       | Automatically selects the right rule: LocalRelativeEstimation for 48.6–66.6°, MiddleOfTheNight elsewhere. |
 
 **Defer to `try_new()`** — set the variant on `params`:
 ```rust
@@ -136,7 +137,7 @@ let rule = HighLatitudeRule::recommended(Coordinates::new(50.85, 4.35));
 
 ### PolarFallback
 
-Fallback for polar latitudes (>66.5°) where the sun may not rise or set for extended periods. All prayer times use the resolved (nearest/reference) latitude.
+Fallback for polar latitudes (>66.6°) where the sun may not rise or set for extended periods. All prayer times use the resolved (nearest/reference) latitude.
 
 | Value              | Description                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |

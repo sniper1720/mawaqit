@@ -31,11 +31,10 @@ pub enum HighLatitudeRule {
     ///
     /// Designed for the Muslim World League's 2009 high-latitude
     /// methodology (between 48.6° and 66.6° latitude) using their
-    /// standard angles (18° Fajr / 17° Isha).  The `f64` is the
-    /// precomputed average Isha proportion of the night
-    /// (`isha_length / night_length`), obtained by scanning a full
-    /// year across days where the sign is stably present.
-    LocalRelativeEstimation(f64),
+    /// standard angles (18° Fajr / 17° Isha).  The percentage is
+    /// resolved automatically inside [`PrayerTimes::try_new`] by
+    /// scanning a full year at the working latitude.
+    LocalRelativeEstimation,
 
     /// Deferred variant resolved inside [`PrayerTimes::try_new`].
     ///
@@ -45,50 +44,31 @@ pub enum HighLatitudeRule {
 }
 
 impl HighLatitudeRule {
-    /// Return the recommended [`HighLatitudeRule`] for the given coordinates
-    /// and calculation parameters.
+    /// Return the recommended [`HighLatitudeRule`] for the given coordinates.
     ///
-    /// - Latitudes with **\|latitude\| ≤ 48.6°** → [`MiddleOfTheNight`](HighLatitudeRule::MiddleOfTheNight)
-    /// - Latitudes with **\|latitude\| > 48.6°** → [`LocalRelativeEstimation`](HighLatitudeRule::LocalRelativeEstimation)
-    ///   (MWL 2009, the authoritative Zone 2 rule for 18°/17° angles).
-    ///
-    /// The boundary ±48.6° is specified by the Muslim World League's 2009
-    /// document as the lower limit of Zone 2.  Within it the standard
-    /// angles are always reachable year-round, so the angle-based
-    /// calculation always succeeds without any fallback.  Beyond ±48.6°
-    /// the more precise
-    /// [`LocalRelativeEstimation`](HighLatitudeRule::LocalRelativeEstimation)
-    /// is applied instead.  The percentage is computed on the fly by
-    /// scanning a full year (see [`mwl_2009`](HighLatitudeRule::mwl_2009)).
+    /// Based on MWL 2009 latitude zones:
+    /// - |latitude| ≤ 48.6° → [`MiddleOfTheNight`](HighLatitudeRule::MiddleOfTheNight) (Zone 1 — no effect, angles always reachable)
+    /// - 48.6° < |latitude| ≤ 66.6° → [`LocalRelativeEstimation`](HighLatitudeRule::LocalRelativeEstimation) (Zone 2)
+    /// - |latitude| > 66.6° → [`MiddleOfTheNight`](HighLatitudeRule::MiddleOfTheNight) (Zone 3 — LRE not designed for polar)
     #[must_use]
-    pub fn recommended(coordinates: Coordinates, params: &Parameters) -> Self {
+    pub fn recommended(coordinates: Coordinates) -> Self {
         let abs_lat = coordinates.latitude.abs();
-        if abs_lat > 66.5 {
+        if abs_lat > 66.6 {
             Self::MiddleOfTheNight
         } else if abs_lat > 48.6 {
-            Self::mwl_2009(coordinates, params)
+            Self::LocalRelativeEstimation
         } else {
             Self::MiddleOfTheNight
         }
-    }
-
-    /// Compute and return a [`LocalRelativeEstimation`](HighLatitudeRule::LocalRelativeEstimation)
-    /// rule for the given location and parameters.
-    ///
-    /// Scans a full calendar year of real days, computes the average Isha
-    /// proportion of the night, and stores it in the variant.
-    #[must_use]
-    pub fn mwl_2009(coordinates: Coordinates, params: &Parameters) -> Self {
-        Self::LocalRelativeEstimation(Self::compute_pct(coordinates, params))
     }
 
     /// Scan a full calendar year and return the average Isha proportion
     /// of the night (`ratio = isha_length / night_length`).
     ///
     /// Per the MWL 2009 Arabic spec, only days where the sign is present
-    /// AND not disturbed (day-to-day jump ≤ 10 min) are included in the
+    /// AND not disturbed (day-to-day jump ≤ 10 min) are included in the
     /// average — days of disappearance or disturbance are excluded.
-    fn compute_pct(coordinates: Coordinates, params: &Parameters) -> f64 {
+    pub fn compute_pct(coordinates: Coordinates, params: &Parameters) -> f64 {
         let year = Utc::now().year();
         let days_in_year = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
             366
@@ -197,23 +177,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn recommended_rule_mwl_2009_above_48_degrees() {
+    fn recommended_rule_lre_above_48_degrees() {
         let location = Coordinates::new(48.983226, -3.216649);
-        let params = Parameters::new(18.0, 17.0);
 
-        assert!(matches!(
-            HighLatitudeRule::recommended(location, &params),
-            HighLatitudeRule::LocalRelativeEstimation(_)
-        ));
+        assert_eq!(
+            HighLatitudeRule::recommended(location),
+            HighLatitudeRule::LocalRelativeEstimation
+        );
     }
 
     #[test]
     fn recommended_rule_middle_of_night_below_48_degrees() {
         let location = Coordinates::new(45.983226, -3.216649);
-        let params = Parameters::new(18.0, 17.0);
 
         assert_eq!(
-            HighLatitudeRule::recommended(location, &params),
+            HighLatitudeRule::recommended(location),
             HighLatitudeRule::MiddleOfTheNight
         );
     }
@@ -221,10 +199,9 @@ mod tests {
     #[test]
     fn recommended_rule_middle_of_night_above_66_degrees() {
         let location = Coordinates::new(70.0, 20.0);
-        let params = Parameters::new(18.0, 17.0);
 
         assert_eq!(
-            HighLatitudeRule::recommended(location, &params),
+            HighLatitudeRule::recommended(location),
             HighLatitudeRule::MiddleOfTheNight
         );
     }
@@ -233,52 +210,40 @@ mod tests {
     fn compute_pct_brussels_is_reasonable() {
         let location = Coordinates::new(50.85, 4.35);
         let params = Parameters::new(18.0, 17.0);
-        let rule = HighLatitudeRule::mwl_2009(location, &params);
+        let pct = HighLatitudeRule::compute_pct(location, &params);
 
-        if let HighLatitudeRule::LocalRelativeEstimation(pct) = rule {
-            assert!(
-                pct > 0.1 && pct < 0.9,
-                "Brussels pct should be between 0.1 and 0.9, got {pct}"
-            );
-        } else {
-            panic!("mwl_2009 did not return LocalRelativeEstimation");
-        }
+        assert!(
+            pct > 0.1 && pct < 0.9,
+            "Brussels pct should be between 0.1 and 0.9, got {pct}"
+        );
     }
 
     #[test]
     fn compute_pct_oslo_is_reasonable() {
         let location = Coordinates::new(59.9094, 10.7349);
         let params = Parameters::new(18.0, 17.0);
-        let rule = HighLatitudeRule::mwl_2009(location, &params);
+        let pct = HighLatitudeRule::compute_pct(location, &params);
 
-        if let HighLatitudeRule::LocalRelativeEstimation(pct) = rule {
-            assert!(
-                pct > 0.1 && pct < 0.9,
-                "Oslo pct should be between 0.1 and 0.9, got {pct}"
-            );
-        } else {
-            panic!("mwl_2009 did not return LocalRelativeEstimation");
-        }
+        assert!(
+            pct > 0.1 && pct < 0.9,
+            "Oslo pct should be between 0.1 and 0.9, got {pct}"
+        );
     }
 
     #[test]
-    fn mwl_2009_equator_fallback() {
+    fn compute_pct_equator_is_reasonable() {
         let location = Coordinates::new(0.0, 0.0);
         let params = Parameters::new(18.0, 17.0);
-        let rule = HighLatitudeRule::mwl_2009(location, &params);
+        let pct = HighLatitudeRule::compute_pct(location, &params);
 
         // At the equator night and day are ~12 h year round.
         // 17° Isha is ~(17/60) ≈ 0.28 of the night after sunset.
         // Pct should be reasonable (0 < pct < 1).
-        if let HighLatitudeRule::LocalRelativeEstimation(pct) = rule {
-            assert!(
-                pct > 0.0 && pct < 1.0,
-                "Equator pct must be between 0 and 1, got {pct}"
-            );
-            // At the equator with 17° angle, expect roughly 0.25–0.35
-            assert!(pct < 0.5, "Equator pct should be < 0.5, got {pct}");
-        } else {
-            panic!("mwl_2009 did not return LocalRelativeEstimation");
-        }
+        assert!(
+            pct > 0.0 && pct < 1.0,
+            "Equator pct must be between 0 and 1, got {pct}"
+        );
+        // At the equator with 17° angle, expect roughly 0.25–0.35
+        assert!(pct < 0.5, "Equator pct should be < 0.5, got {pct}");
     }
 }
