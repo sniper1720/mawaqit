@@ -14,18 +14,18 @@ impl Qiblah {
     #[must_use]
     pub fn new(location_coordinates: Coordinates) -> Self {
         let makkah_coordinates = Coordinates::new(21.4225241, 39.8261818);
-        let term1 = (makkah_coordinates.longitude_angle().radians()
+        let longitude_difference_sin = (makkah_coordinates.longitude_angle().radians()
             - location_coordinates.longitude_angle().radians())
         .sin();
-        let term2 = makkah_coordinates.latitude_angle().radians().tan()
+        let makkah_latitude_term = makkah_coordinates.latitude_angle().radians().tan()
             * location_coordinates.latitude_angle().radians().cos();
-        let term3 = (makkah_coordinates.longitude_angle().radians()
+        let location_latitude_term = (makkah_coordinates.longitude_angle().radians()
             - location_coordinates.longitude_angle().radians())
         .cos()
             * location_coordinates.latitude_angle().radians().sin();
-        let term4 = term1.atan2(term2 - term3);
+        let azimuth = longitude_difference_sin.atan2(makkah_latitude_term - location_latitude_term);
 
-        Qiblah(Angle::from_radians(term4).unwound().degrees)
+        Qiblah(Angle::from_radians(azimuth).unwound().degrees)
     }
 
     /// Return the Qibla direction in degrees clockwise from true north.
@@ -37,7 +37,7 @@ impl Qiblah {
 
 impl fmt::Display for Qiblah {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.value())
+        write!(f, "{:.4}", self.value())
     }
 }
 
@@ -144,8 +144,7 @@ mod tests {
     fn qiblah_direction_display() {
         let nyc = Coordinates::new(40.7128, -74.0059);
         let qiblah = Qiblah::new(nyc);
-        let actual_value = qiblah.to_string();
 
-        assert!(actual_value.contains("58.4817635"));
+        assert_eq!(qiblah.to_string(), "58.4818");
     }
 }

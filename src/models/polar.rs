@@ -10,47 +10,34 @@ use crate::models::madhab::Madhab;
 /// Only latitude is substituted — original longitude is always kept.
 /// This means two polar cities at the same latitude but different
 /// longitudes get different fallback times.
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub enum PolarFallback {
+///
+/// Absence of a strategy is represented by `Parameters::polar_estimation`
+/// being `None`: the true latitude is used, and
+/// [`crate::schedule::PrayerTimes::try_new`] returns an error when
+/// sunrise or sunset (or the Asr shadow angle) does not occur.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PolarEstimation {
     /// Scan south along the same longitude until a latitude with normal
     /// sunrise and sunset is found.
     NearestLatitude,
     /// Fixed 45°N/S, original longitude kept.
     Reference45,
-    /// No fallback.  `PrayerTimes::try_new()` returns `Err` at polar.
-    #[default]
-    None,
 }
 
-impl PolarFallback {
-    /// Return the recommended [`PolarFallback`] for the given coordinates.
-    ///
-    /// - `|lat| > 66.6°` → [`NearestLatitude`]
-    /// - `|lat| ≤ 66.6°` → [`None`]
-    #[must_use]
-    pub fn recommended(coordinates: Coordinates) -> Self {
-        if coordinates.latitude.abs() > 66.6 {
-            Self::NearestLatitude
-        } else {
-            Self::None
-        }
-    }
-
+impl PolarEstimation {
     /// Resolve the effective latitude for solar calculations.
     ///
-    /// If [`SolarTime::new()`] succeeds at the original coordinates,
-    /// returns the original latitude unchanged (wrapped in `Some`).
-    /// Otherwise applies the fallback strategy.
-    ///
-    /// Returns `None` only for [`PolarFallback::None`] when the original
-    /// latitude has no sunrise/sunset (polar day/night).
+    /// When the original coordinates already produce a valid sunrise,
+    /// sunset, and Asr shadow on `date` and the adjacent days, the
+    /// original latitude is returned unchanged; otherwise the strategy
+    /// is applied.
     #[must_use]
     pub fn resolve_latitude(
         self,
         date: DateTime<Utc>,
         coordinates: Coordinates,
         madhab: Madhab,
-    ) -> Option<f64> {
+    ) -> f64 {
         let shadow = madhab.shadow() as f64;
         let asr_reachable = |st: SolarTime| st.time_for_shadow(shadow).is_some();
         let yesterday = date - Duration::days(1);
@@ -58,7 +45,7 @@ impl PolarFallback {
 
         // True when the original latitude is not on a reappearance/disappearance
         // boundary — yesterday and tomorrow also have valid sunrise/sunset.
-        // Mirrors MWL 2009's concept of an *undisturbed* day (see compute_pct).
+        // Mirrors MWL 2009's concept of an *undisturbed* day (see compute_isha_night_ratio).
         fn undisturbed(
             date: DateTime<Utc>,
             yesterday: DateTime<Utc>,
@@ -74,23 +61,16 @@ impl PolarFallback {
         match self {
             Self::NearestLatitude => {
                 if undisturbed(date, yesterday, tomorrow, coordinates, asr_reachable) {
-                    Some(coordinates.latitude)
+                    coordinates.latitude
                 } else {
-                    Some(nearest_working_latitude(date, &coordinates, shadow))
+                    nearest_working_latitude(date, &coordinates, shadow)
                 }
             }
             Self::Reference45 => {
                 if undisturbed(date, yesterday, tomorrow, coordinates, asr_reachable) {
-                    Some(coordinates.latitude)
+                    coordinates.latitude
                 } else {
-                    Some(45.0 * coordinates.latitude.signum())
-                }
-            }
-            Self::None => {
-                if undisturbed(date, yesterday, tomorrow, coordinates, asr_reachable) {
-                    Some(coordinates.latitude)
-                } else {
-                    None
+                    45.0 * coordinates.latitude.signum()
                 }
             }
         }
@@ -110,36 +90,41 @@ fn nearest_working_latitude(date: DateTime<Utc>, coords: &Coordinates, shadow: f
         shadow: f64,
         require_adjacent: bool,
     ) -> Option<f64> {
-        let sign = coords.latitude.signum();
-        let mut lo = 0.0_f64;
-        let mut hi = coords.latitude.abs();
+        let latitude_sign = coords.latitude.signum();
+        let mut lower_bound = 0.0_f64;
+        let mut upper_bound = coords.latitude.abs();
         let yesterday = date - Duration::days(1);
         let tomorrow = date + Duration::days(1);
 
         for _ in 0..24 {
-            let mid = (lo + hi) / 2.0;
-            let test = Coordinates::new(mid * sign, coords.longitude);
+            let probe_magnitude = (lower_bound + upper_bound) / 2.0;
+            let probe_coordinates =
+                Coordinates::new(probe_magnitude * latitude_sign, coords.longitude);
 
-            let today_ok =
-                SolarTime::new(date, test).is_ok_and(|st| st.time_for_shadow(shadow).is_some());
+            let today_ok = SolarTime::new(date, probe_coordinates)
+                .is_ok_and(|st| st.time_for_shadow(shadow).is_some());
 
             let ok = if require_adjacent {
                 today_ok
-                    && SolarTime::new(yesterday, test).is_ok()
-                    && SolarTime::new(tomorrow, test).is_ok()
+                    && SolarTime::new(yesterday, probe_coordinates).is_ok()
+                    && SolarTime::new(tomorrow, probe_coordinates).is_ok()
             } else {
                 today_ok
             };
 
             if ok {
-                lo = mid;
+                lower_bound = probe_magnitude;
             } else {
-                hi = mid;
+                upper_bound = probe_magnitude;
             }
         }
         // Only return a result if we actually moved off zero (found
         // at least one valid latitude).
-        if lo > 0.0 { Some(lo * sign) } else { None }
+        if lower_bound > 0.0 {
+            Some(lower_bound * latitude_sign)
+        } else {
+            None
+        }
     }
 
     check(date, coords, shadow, true)

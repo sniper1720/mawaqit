@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use mawaqit::prelude::*;
 
 /// Oslo (59.9°N, 10.7°E) on summer solstice with LRE (Zone 2).
-/// This should work identically to before — polar_fallback is not involved
+/// This should work identically to before — polar_estimation is not involved
 /// since try_new() succeeds at the original latitude.
 #[test]
 fn oslo_lre_unchanged() {

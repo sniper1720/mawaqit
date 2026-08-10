@@ -28,7 +28,7 @@ pub use crate::models::high_altitude_rule::HighLatitudeRule;
 pub use crate::models::madhab::Madhab;
 pub use crate::models::method::Method;
 pub use crate::models::parameters::{Configuration, Parameters};
-pub use crate::models::polar::PolarFallback;
+pub use crate::models::polar::PolarEstimation;
 pub use crate::models::prayer::Prayer;
 pub use crate::models::rounding::Rounding;
 pub use crate::models::shafaq::Shafaq;
@@ -54,7 +54,7 @@ pub mod prelude {
     #[doc(no_inline)]
     pub use crate::models::parameters::{Configuration, Parameters};
     #[doc(no_inline)]
-    pub use crate::models::polar::PolarFallback;
+    pub use crate::models::polar::PolarEstimation;
     #[doc(no_inline)]
     pub use crate::models::prayer::Prayer;
     #[doc(no_inline)]

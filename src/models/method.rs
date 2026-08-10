@@ -43,7 +43,7 @@ pub enum Method {
     /// Standard Fajr time with an angle of 18°. Slightly earlier Isha time with an angle of 17.5°.
     Kuwait,
 
-    /// Same Isha interval as `ummAlQura` but with the standard Fajr time using an angle of 18°.
+    /// Same Isha interval as [`Method::UmmAlQura`] but with the standard Fajr time using an angle of 18°.
     Qatar,
 
     /// Used in Singapore, Malaysia, and Indonesia. Early Fajr time with an angle of 20°

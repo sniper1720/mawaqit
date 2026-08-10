@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 
 use crate::astronomy::solar::SolarTime;
 use crate::astronomy::unit::{Angle, Coordinates};
@@ -32,11 +32,11 @@ pub enum HighLatitudeRule {
     /// Designed for the Muslim World League's 2009 high-latitude
     /// methodology (between 48.6° and 66.6° latitude) using their
     /// standard angles (18° Fajr / 17° Isha).  The percentage is
-    /// resolved automatically inside [`PrayerTimes::try_new`] by
+    /// resolved automatically inside [`crate::schedule::PrayerTimes::try_new`] by
     /// scanning a full year at the working latitude.
     LocalRelativeEstimation,
 
-    /// Deferred variant resolved inside [`PrayerTimes::try_new`].
+    /// Deferred variant resolved inside [`crate::schedule::PrayerTimes::try_new`].
     ///
     /// Evaluated via [`recommended()`](HighLatitudeRule::recommended) against
     /// the working latitude (original or fallback-resolved).
@@ -62,14 +62,17 @@ impl HighLatitudeRule {
         }
     }
 
-    /// Scan a full calendar year and return the average Isha proportion
+    /// Scan the given calendar year and return the average Isha proportion
     /// of the night (`ratio = isha_length / night_length`).
     ///
     /// Per the MWL 2009 Arabic spec, only days where the sign is present
     /// AND not disturbed (day-to-day jump ≤ 10 min) are included in the
     /// average — days of disappearance or disturbance are excluded.
-    pub fn compute_pct(coordinates: Coordinates, params: &Parameters) -> f64 {
-        let year = Utc::now().year();
+    pub fn compute_isha_night_ratio(
+        coordinates: Coordinates,
+        params: &Parameters,
+        year: i32,
+    ) -> f64 {
         let days_in_year = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
             366
         } else {
@@ -77,8 +80,8 @@ impl HighLatitudeRule {
         };
         let jan1 = NaiveDate::from_ymd_opt(year, 1, 1).expect("valid date");
 
-        let mut total = 0.0;
-        let mut count = 0usize;
+        let mut ratio_sum = 0.0;
+        let mut days_included = 0usize;
         let mut prev_isha: Option<DateTime<Utc>> = None;
         let mut prev_was_reachable = false;
 
@@ -139,11 +142,11 @@ impl HighLatitudeRule {
             if include {
                 let night = solar_tomorrow
                     .sunrise
-                    .expect("compute_pct only runs where sunrise exists")
+                    .expect("compute_isha_night_ratio only runs where sunrise exists")
                     .signed_duration_since(
                         solar_today
                             .sunset
-                            .expect("compute_pct only runs where sunset exists"),
+                            .expect("compute_isha_night_ratio only runs where sunset exists"),
                     );
                 let night_secs = night.num_seconds() as f64;
                 if night_secs > 0.0 {
@@ -152,11 +155,11 @@ impl HighLatitudeRule {
                         .signed_duration_since(
                             solar_today
                                 .sunset
-                                .expect("compute_pct only runs where sunset exists"),
+                                .expect("compute_isha_night_ratio only runs where sunset exists"),
                         );
                     let ratio = isha_len.num_seconds() as f64 / night_secs;
-                    total += ratio;
-                    count += 1;
+                    ratio_sum += ratio;
+                    days_included += 1;
                 }
             }
 
@@ -164,10 +167,10 @@ impl HighLatitudeRule {
             prev_was_reachable = isha_time.is_some();
         }
 
-        if count == 0 {
+        if days_included == 0 {
             0.5
         } else {
-            total / count as f64
+            ratio_sum / days_included as f64
         }
     }
 }
@@ -207,43 +210,43 @@ mod tests {
     }
 
     #[test]
-    fn compute_pct_brussels_is_reasonable() {
+    fn compute_isha_night_ratio_brussels_is_reasonable() {
         let location = Coordinates::new(50.85, 4.35);
         let params = Parameters::new(18.0, 17.0);
-        let pct = HighLatitudeRule::compute_pct(location, &params);
+        let ratio = HighLatitudeRule::compute_isha_night_ratio(location, &params, 2026);
 
         assert!(
-            pct > 0.1 && pct < 0.9,
-            "Brussels pct should be between 0.1 and 0.9, got {pct}"
+            ratio > 0.1 && ratio < 0.9,
+            "Brussels ratio should be between 0.1 and 0.9, got {ratio}"
         );
     }
 
     #[test]
-    fn compute_pct_oslo_is_reasonable() {
+    fn compute_isha_night_ratio_oslo_is_reasonable() {
         let location = Coordinates::new(59.9094, 10.7349);
         let params = Parameters::new(18.0, 17.0);
-        let pct = HighLatitudeRule::compute_pct(location, &params);
+        let ratio = HighLatitudeRule::compute_isha_night_ratio(location, &params, 2026);
 
         assert!(
-            pct > 0.1 && pct < 0.9,
-            "Oslo pct should be between 0.1 and 0.9, got {pct}"
+            ratio > 0.1 && ratio < 0.9,
+            "Oslo ratio should be between 0.1 and 0.9, got {ratio}"
         );
     }
 
     #[test]
-    fn compute_pct_equator_is_reasonable() {
+    fn compute_isha_night_ratio_equator_is_reasonable() {
         let location = Coordinates::new(0.0, 0.0);
         let params = Parameters::new(18.0, 17.0);
-        let pct = HighLatitudeRule::compute_pct(location, &params);
+        let ratio = HighLatitudeRule::compute_isha_night_ratio(location, &params, 2026);
 
         // At the equator night and day are ~12 h year round.
         // 17° Isha is ~(17/60) ≈ 0.28 of the night after sunset.
-        // Pct should be reasonable (0 < pct < 1).
+        // Ratio should be reasonable (0 < ratio < 1).
         assert!(
-            pct > 0.0 && pct < 1.0,
-            "Equator pct must be between 0 and 1, got {pct}"
+            ratio > 0.0 && ratio < 1.0,
+            "Equator ratio must be between 0 and 1, got {ratio}"
         );
         // At the equator with 17° angle, expect roughly 0.25–0.35
-        assert!(pct < 0.5, "Equator pct should be < 0.5, got {pct}");
+        assert!(ratio < 0.5, "Equator ratio should be < 0.5, got {ratio}");
     }
 }

@@ -12,7 +12,7 @@ fn scan_asr_gaps() {
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
-        .polar_fallback(PolarFallback::NearestLatitude)
+        .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
     println!(
@@ -42,13 +42,11 @@ fn scan_asr_gaps() {
                         let i = times.time(Prayer::Isha).format("%H:%M");
                         let gap =
                             (times.time(Prayer::Maghrib) - times.time(Prayer::Asr)).num_minutes();
-                        let resolved = PolarFallback::NearestLatitude
-                            .resolve_latitude(
-                                date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
-                                coords,
-                                Madhab::Shafi,
-                            )
-                            .unwrap_or(f64::NAN);
+                        let resolved = PolarEstimation::NearestLatitude.resolve_latitude(
+                            date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+                            coords,
+                            Madhab::Shafi,
+                        );
                         println!(
                             "{:>10} {:>7.0} {:>8.3} {:>5} {:>5} {:>5} {:>5} {:>5} {:>5} {:>5}min",
                             format!("{hemi} {season}"),
@@ -64,13 +62,11 @@ fn scan_asr_gaps() {
                         );
                     }
                     Err(_) => {
-                        let resolved = PolarFallback::NearestLatitude
-                            .resolve_latitude(
-                                date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
-                                coords,
-                                Madhab::Shafi,
-                            )
-                            .unwrap_or(f64::NAN);
+                        let resolved = PolarEstimation::NearestLatitude.resolve_latitude(
+                            date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+                            coords,
+                            Madhab::Shafi,
+                        );
                         println!(
                             "{:>10} {:>7.0} {:>8.3}   FAILED",
                             format!("{hemi} {season}"),
@@ -99,12 +95,15 @@ fn scan_latitude_stability() {
         for &lat in &lats_north {
             let coords = Coordinates::new(lat, 0.0);
             let prayer_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
-            let resolved =
-                PolarFallback::NearestLatitude.resolve_latitude(prayer_date, coords, Madhab::Shafi);
+            let resolved = PolarEstimation::NearestLatitude.resolve_latitude(
+                prayer_date,
+                coords,
+                Madhab::Shafi,
+            );
             let params = Configuration::new(18.0, 17.0)
                 .method(Method::MuslimWorldLeague)
                 .madhab(Madhab::Shafi)
-                .polar_fallback(PolarFallback::NearestLatitude)
+                .polar_estimation(PolarEstimation::NearestLatitude)
                 .done();
             if let Ok(times) = PrayerTimes::try_new(date, coords, params) {
                 let f = times.time(Prayer::Fajr).format("%H:%M");
@@ -126,12 +125,15 @@ fn scan_latitude_stability() {
         for &lat in &lats_south {
             let coords = Coordinates::new(lat, 0.0);
             let prayer_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
-            let resolved =
-                PolarFallback::NearestLatitude.resolve_latitude(prayer_date, coords, Madhab::Shafi);
+            let resolved = PolarEstimation::NearestLatitude.resolve_latitude(
+                prayer_date,
+                coords,
+                Madhab::Shafi,
+            );
             let params = Configuration::new(18.0, 17.0)
                 .method(Method::MuslimWorldLeague)
                 .madhab(Madhab::Shafi)
-                .polar_fallback(PolarFallback::NearestLatitude)
+                .polar_estimation(PolarEstimation::NearestLatitude)
                 .done();
             if let Ok(times) = PrayerTimes::try_new(date, coords, params) {
                 let f = times.time(Prayer::Fajr).format("%H:%M");
@@ -162,7 +164,7 @@ fn tromso_summer_solstice_nearest_latitude() {
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
-        .polar_fallback(PolarFallback::NearestLatitude)
+        .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
     // Should succeed — uses NearestLatitude to find a working latitude
@@ -197,8 +199,8 @@ fn tromso_summer_solstice_nearest_latitude() {
     );
 }
 
-/// Tromsø (70°N) on summer solstice with PolarFallback::None:
-/// try_new() should return Err gracefully.
+/// Tromsø (70°N) on summer solstice with no fallback strategy:
+/// try_new() should return an informative Err.
 #[test]
 fn tromso_summer_solstice_no_fallback_returns_error() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
@@ -206,13 +208,14 @@ fn tromso_summer_solstice_no_fallback_returns_error() {
     let mut params: Parameters = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
     // Explicitly set None (already default, but to be clear)
-    params.polar_fallback = PolarFallback::None;
+    params.polar_estimation = None;
 
     let result = PrayerTimes::try_new(date, coords, params);
 
-    assert!(
-        result.is_err(),
-        "PolarFallback::None at polar should return Err"
+    assert_eq!(
+        result.err(),
+        Some("sunrise or sunset does not occur at this latitude on this date"),
+        "No fallback at polar day should name the real failure"
     );
 }
 
@@ -242,7 +245,7 @@ fn longyearbyen_reference_45() {
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
-        .polar_fallback(PolarFallback::Reference45)
+        .polar_estimation(PolarEstimation::Reference45)
         .done();
 
     let result = PrayerTimes::try_new(date, coords, params);
@@ -285,7 +288,7 @@ fn southern_polar_reference_45() {
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
-        .polar_fallback(PolarFallback::Reference45)
+        .polar_estimation(PolarEstimation::Reference45)
         .done();
 
     let result = PrayerTimes::try_new(date, coords, params);
@@ -319,8 +322,8 @@ fn southern_polar_reference_45() {
     );
 }
 
-/// Non-polar control (Singapore 1.4°N, 103.8°E) with PolarFallback::None:
-/// should behave identically to the old code — no polar issues.
+/// Non-polar control (Singapore 1.4°N, 103.8°E) with no fallback strategy:
+/// should behave identically — no polar issues.
 #[test]
 fn singapore_no_fallback() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
@@ -331,7 +334,7 @@ fn singapore_no_fallback() {
 
     assert!(
         result.is_ok(),
-        "Non-polar should work with PolarFallback::None: {:?}",
+        "Non-polar should work with no fallback strategy: {:?}",
         result.err()
     );
     let times = result.expect("already checked");
@@ -346,42 +349,18 @@ fn singapore_no_fallback() {
     );
 }
 
-/// builder-style PolarFallback can be set via Configuration::polar_fallback()
+/// builder-style PolarEstimation can be set via Configuration::polar_estimation()
 #[test]
-fn builder_polar_fallback_nearest_latitude() {
+fn builder_polar_estimation_nearest_latitude() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
     let coords = Coordinates::new(70.0, 20.0);
 
     let params = Configuration::new(18.0, 17.0)
-        .polar_fallback(PolarFallback::NearestLatitude)
+        .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
     let result = PrayerTimes::try_new(date, coords, params);
     assert!(result.is_ok(), "Builder with NearestLatitude should work");
-}
-
-/// PolarFallback::recommended returns NearestLatitude for >66.6°
-#[test]
-fn polar_fallback_recommended_above_66() {
-    let coords = Coordinates::new(70.0, 20.0);
-    assert_eq!(
-        PolarFallback::recommended(coords),
-        PolarFallback::NearestLatitude
-    );
-}
-
-/// PolarFallback::recommended returns None for ≤66.6°
-#[test]
-fn polar_fallback_recommended_below_66() {
-    let coords = Coordinates::new(48.6, 20.0);
-    assert_eq!(PolarFallback::recommended(coords), PolarFallback::None);
-}
-
-/// PolarFallback::recommended returns None at exactly 66.6° (boundary, not >)
-#[test]
-fn polar_fallback_recommended_at_boundary() {
-    let coords = Coordinates::new(66.6, 0.0);
-    assert_eq!(PolarFallback::recommended(coords), PolarFallback::None);
 }
 
 /// Tromsø (70°N) in winter (polar night, no sunrise) with NearestLatitude.
@@ -392,7 +371,7 @@ fn tromso_winter_nearest_latitude() {
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
-        .polar_fallback(PolarFallback::NearestLatitude)
+        .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
     let result = PrayerTimes::try_new(date, coords, params);
@@ -425,7 +404,8 @@ fn tromso_winter_nearest_latitude() {
     );
 }
 
-/// Tromsø (70°N) in winter: PolarFallback::None should return Err.
+/// Tromsø (70°N) in winter: no fallback strategy should return an
+/// informative Err naming the missing sunrise/sunset.
 #[test]
 fn tromso_winter_no_fallback_returns_error() {
     let date = NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid date");
@@ -433,9 +413,42 @@ fn tromso_winter_no_fallback_returns_error() {
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
     let result = PrayerTimes::try_new(date, coords, params);
+    assert_eq!(
+        result.err(),
+        Some("sunrise or sunset does not occur at this latitude on this date"),
+        "No fallback at polar night should name the real failure"
+    );
+}
+
+/// 67°N on the winter solstice: sunrise/sunset exist, but the Asr shadow
+/// angle is geometrically unreachable — the error names the real failure.
+#[test]
+fn no_fallback_asr_unreachable_error_message() {
+    let date = NaiveDate::from_ymd_opt(2026, 12, 21).expect("valid date");
+    let coords = Coordinates::new(67.0, 0.0);
+    let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
+
+    let result = PrayerTimes::try_new(date, coords, params);
+
+    assert_eq!(
+        result.err(),
+        Some("Asr shadow angle not reachable at this latitude on this date")
+    );
+}
+
+/// 66°N on the winter solstice: just below the unreachable-Asr window,
+/// everything works with no fallback configured.
+#[test]
+fn no_fallback_below_asr_window_succeeds() {
+    let date = NaiveDate::from_ymd_opt(2026, 12, 21).expect("valid date");
+    let coords = Coordinates::new(66.0, 0.0);
+    let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
+
+    let result = PrayerTimes::try_new(date, coords, params);
     assert!(
-        result.is_err(),
-        "PolarFallback::None at polar winter should return Err"
+        result.is_ok(),
+        "66°N winter solstice should work without fallback: {:?}",
+        result.err()
     );
 }
 
@@ -448,14 +461,14 @@ fn debug_southern_times() {
 
     // Resolved latitude
     let resolved =
-        PolarFallback::NearestLatitude.resolve_latitude(prayer_date, coords, Madhab::Shafi);
+        PolarEstimation::NearestLatitude.resolve_latitude(prayer_date, coords, Madhab::Shafi);
     println!("Original lat: -70.0, Resolved lat: {:?}", resolved);
 
     // Compute transit at original lat by running try_new and printing individual prayer times
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
-        .polar_fallback(PolarFallback::NearestLatitude)
+        .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
     let times = PrayerTimes::try_new(date, coords, params).expect("should work");
@@ -482,7 +495,7 @@ fn southern_polar_winter_nearest_latitude() {
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
-        .polar_fallback(PolarFallback::NearestLatitude)
+        .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
     let result = PrayerTimes::try_new(date, coords, params);
@@ -522,7 +535,7 @@ fn polar_circle_solstice_nearest_latitude() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
     let coords = Coordinates::new(67.0, 0.0);
     let params = Configuration::new(18.0, 17.0)
-        .polar_fallback(PolarFallback::NearestLatitude)
+        .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
     let result = PrayerTimes::try_new(date, coords, params);
@@ -542,10 +555,10 @@ fn different_longitudes_different_dhuhr() {
     let coords_west = Coordinates::new(70.0, -20.0);
 
     let params_east = Configuration::new(18.0, 17.0)
-        .polar_fallback(PolarFallback::NearestLatitude)
+        .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
     let params_west = Configuration::new(18.0, 17.0)
-        .polar_fallback(PolarFallback::NearestLatitude)
+        .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
     let east_times = PrayerTimes::try_new(date, coords_east, params_east).expect("east ok");

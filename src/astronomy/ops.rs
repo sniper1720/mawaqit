@@ -7,10 +7,10 @@ use crate::astronomy::unit::{Angle, Coordinates};
 ///
 /// Equation from Astronomical Algorithms page 163.
 pub fn mean_solar_longitude(julian_century: f64) -> Angle {
-    let term1 = 280.4664567;
-    let term2 = 36000.76983 * julian_century;
-    let term3 = 0.0003032 * julian_century.powf(2.0);
-    let degrees = term1 + term2 + term3;
+    let constant_term = 280.4664567;
+    let linear_term = 36000.76983 * julian_century;
+    let quadratic_term = 0.0003032 * julian_century.powf(2.0);
+    let degrees = constant_term + linear_term + quadratic_term;
 
     Angle::new(degrees).unwound()
 }
@@ -19,9 +19,9 @@ pub fn mean_solar_longitude(julian_century: f64) -> Angle {
 ///
 /// Equation from Astronomical Algorithms page 144.
 pub fn mean_lunar_longitude(julian_century: f64) -> Angle {
-    let term1 = 218.3165;
-    let term2 = 481267.8813 * julian_century;
-    let degrees = term1 + term2;
+    let constant_term = 218.3165;
+    let linear_term = 481267.8813 * julian_century;
+    let degrees = constant_term + linear_term;
 
     Angle::new(degrees).unwound()
 }
@@ -30,11 +30,11 @@ pub fn mean_lunar_longitude(julian_century: f64) -> Angle {
 ///
 /// Equation from Astronomical Algorithms page 144.
 pub fn ascending_lunar_node_longitude(julian_century: f64) -> Angle {
-    let term1 = 125.04452;
-    let term2 = 1934.136261 * julian_century;
-    let term3 = 0.0020708 * julian_century.powf(2.0);
-    let term4 = julian_century.powf(3.0) / 450000.0;
-    let degrees = term1 - term2 + term3 + term4;
+    let constant_term = 125.04452;
+    let linear_term = 1934.136261 * julian_century;
+    let quadratic_term = 0.0020708 * julian_century.powf(2.0);
+    let cubic_term = julian_century.powf(3.0) / 450000.0;
+    let degrees = constant_term - linear_term + quadratic_term + cubic_term;
 
     Angle::new(degrees).unwound()
 }
@@ -43,10 +43,10 @@ pub fn ascending_lunar_node_longitude(julian_century: f64) -> Angle {
 ///
 /// Equation from Astronomical Algorithms page 163.
 pub fn mean_solar_anomaly(julian_century: f64) -> Angle {
-    let term1 = 357.52911;
-    let term2 = 35999.05029 * julian_century;
-    let term3 = 0.0001537 * julian_century.powf(2.0);
-    let degrees = term1 + term2 - term3;
+    let constant_term = 357.52911;
+    let linear_term = 35999.05029 * julian_century;
+    let quadratic_term = 0.0001537 * julian_century.powf(2.0);
+    let degrees = constant_term + linear_term - quadratic_term;
 
     Angle::new(degrees).unwound()
 }
@@ -56,12 +56,14 @@ pub fn mean_solar_anomaly(julian_century: f64) -> Angle {
 /// Equation from Astronomical Algorithms page 164.
 pub fn solar_equation_of_the_center(julian_century: f64, mean_anomaly: Angle) -> Angle {
     let mean_radians = mean_anomaly.radians();
-    let term1 = (1.914602 - (0.004817 * julian_century) - (0.000014 * julian_century.powf(2.0)))
-        * mean_radians.sin();
-    let term2 = (0.019993 - (0.000101 * julian_century)) * (2.0 * mean_radians).sin();
-    let term3 = 0.000289 * (3.0 * mean_radians).sin();
+    let first_harmonic_term =
+        (1.914602 - (0.004817 * julian_century) - (0.000014 * julian_century.powf(2.0)))
+            * mean_radians.sin();
+    let second_harmonic_term =
+        (0.019993 - (0.000101 * julian_century)) * (2.0 * mean_radians).sin();
+    let third_harmonic_term = 0.000289 * (3.0 * mean_radians).sin();
 
-    Angle::new(term1 + term2 + term3)
+    Angle::new(first_harmonic_term + second_harmonic_term + third_harmonic_term)
 }
 
 /// The apparent longitude of the Sun, referred to the
@@ -82,12 +84,12 @@ pub fn apparent_solar_longitude(julian_century: f64, mean_longitude: Angle) -> A
 ///
 /// Equation from Astronomical Algorithms page 147.
 pub fn mean_obliquity_of_the_ecliptic(julian_century: f64) -> Angle {
-    let term1 = 23.439291;
-    let term2 = 0.013004167 * julian_century;
-    let term3 = 0.0000001639 * julian_century.powf(2.0);
-    let term4 = 0.0000005036 * julian_century.powf(3.0);
+    let constant_term = 23.439291;
+    let linear_term = 0.013004167 * julian_century;
+    let quadratic_term = 0.0000001639 * julian_century.powf(2.0);
+    let cubic_term = 0.0000005036 * julian_century.powf(3.0);
 
-    Angle::new(term1 - term2 - term3 + term4)
+    Angle::new(constant_term - linear_term - quadratic_term + cubic_term)
 }
 
 /// The mean obliquity of the ecliptic, corrected for
@@ -109,12 +111,12 @@ pub fn apparent_obliquity_of_the_ecliptic(
 ///
 /// Equation from Astronomical Algorithms page 165.
 pub fn mean_sidereal_time(julian_century: f64) -> Angle {
-    let julian_day = (julian_century * 36525.0) + 2451545.0;
-    let term1 = 280.46061837;
-    let term2 = 360.98564736629 * (julian_day - 2451545.0);
-    let term3 = 0.000387933 * julian_century.powf(2.0);
-    let term4 = julian_century.powf(3.0) / 38710000.0;
-    let degrees = term1 + term2 + term3 - term4;
+    let julian_day_value = (julian_century * 36525.0) + 2451545.0;
+    let constant_term = 280.46061837;
+    let linear_term = 360.98564736629 * (julian_day_value - 2451545.0);
+    let quadratic_term = 0.000387933 * julian_century.powf(2.0);
+    let cubic_term = julian_century.powf(3.0) / 38710000.0;
+    let degrees = constant_term + linear_term + quadratic_term - cubic_term;
 
     Angle::new(degrees).unwound()
 }
@@ -127,12 +129,12 @@ pub fn nutation_in_longitude(
     lunar_longitude: Angle,
     ascending_node: Angle,
 ) -> f64 {
-    let term1 = (-17.2 / 3600.0) * ascending_node.radians().sin();
-    let term2 = (1.32 / 3600.0) * (2.0 * solar_longitude.radians()).sin();
-    let term3 = (0.23 / 3600.0) * (2.0 * lunar_longitude.radians()).sin();
-    let term4 = (0.21 / 3600.0) * (2.0 * ascending_node.radians()).sin();
+    let node_term = (-17.2 / 3600.0) * ascending_node.radians().sin();
+    let solar_longitude_term = (1.32 / 3600.0) * (2.0 * solar_longitude.radians()).sin();
+    let lunar_longitude_term = (0.23 / 3600.0) * (2.0 * lunar_longitude.radians()).sin();
+    let double_node_term = (0.21 / 3600.0) * (2.0 * ascending_node.radians()).sin();
 
-    term1 - term2 - term3 + term4
+    node_term - solar_longitude_term - lunar_longitude_term + double_node_term
 }
 
 /// Nutation in obliquity.
@@ -143,12 +145,12 @@ pub fn nutation_in_obliquity(
     lunar_longitude: Angle,
     ascending_node: Angle,
 ) -> f64 {
-    let term1 = (9.2 / 3600.0) * ascending_node.radians().cos();
-    let term2 = (0.57 / 3600.0) * (2.0 * solar_longitude.radians()).cos();
-    let term3 = (0.10 / 3600.0) * (2.0 * lunar_longitude.radians()).cos();
-    let term4 = (0.09 / 3600.0) * (2.0 * ascending_node.radians()).cos();
+    let node_term = (9.2 / 3600.0) * ascending_node.radians().cos();
+    let solar_longitude_term = (0.57 / 3600.0) * (2.0 * solar_longitude.radians()).cos();
+    let lunar_longitude_term = (0.10 / 3600.0) * (2.0 * lunar_longitude.radians()).cos();
+    let double_node_term = (0.09 / 3600.0) * (2.0 * ascending_node.radians()).cos();
 
-    term1 + term2 + term3 - term4
+    node_term + solar_longitude_term + lunar_longitude_term - double_node_term
 }
 
 /// Altitude of a celestial body relative to the observer's horizon.
@@ -159,12 +161,12 @@ pub fn altitude_of_celestial_body(
     declination: Angle,
     local_hour_angle: Angle,
 ) -> Angle {
-    let term1 = observer_latitude.radians().sin() * declination.radians().sin();
-    let term2 = observer_latitude.radians().cos()
+    let latitude_declination_term = observer_latitude.radians().sin() * declination.radians().sin();
+    let hour_angle_term = observer_latitude.radians().cos()
         * declination.radians().cos()
         * local_hour_angle.radians().cos();
 
-    Angle::from_radians((term1 + term2).asin())
+    Angle::from_radians((latitude_declination_term + hour_angle_term).asin())
 }
 
 /// Approximate solar transit time.
@@ -190,17 +192,18 @@ pub fn corrected_transit(
     next_right_ascension: Angle,
 ) -> f64 {
     let longitude_angle = longitude * Angle::new(-1.0);
-    let plane_angle =
+    let sidereal_angle =
         Angle::new(sidereal_time.degrees + (360.985647 * approximate_transit)).unwound();
-    let interpolated_angles = interpolate_angles(
+    let interpolated_right_ascension = interpolate_angles(
         right_ascension,
         previous_right_ascension,
         next_right_ascension,
         approximate_transit,
     )
     .unwound();
-    let angles = (plane_angle - longitude_angle - interpolated_angles).quadrant_shifted();
-    let angle_delta = angles / Angle::new(-360.0);
+    let hour_angle =
+        (sidereal_angle - longitude_angle - interpolated_right_ascension).quadrant_shifted();
+    let angle_delta = hour_angle / Angle::new(-360.0);
 
     (approximate_transit + angle_delta.degrees) * 24.0
 }
@@ -218,52 +221,55 @@ pub fn corrected_hour_angle(
     declination: InterpolatedAngle,
 ) -> f64 {
     let longitude_angle = coordinates.longitude_angle() * Angle::new(-1.0);
-    let term1 = angle.radians().sin()
+    let numerator_term = angle.radians().sin()
         - (coordinates.latitude_angle().radians().sin() * declination.current.radians().sin());
-    let term2 = coordinates.latitude_angle().radians().cos() * declination.current.radians().cos();
-    let ratio = term1 / term2;
+    let denominator_term =
+        coordinates.latitude_angle().radians().cos() * declination.current.radians().cos();
+    let ratio = numerator_term / denominator_term;
     // Meeus §14: if |RHS| > 1 the target altitude is never reached.
     // Return NaN so callers (setting_hour / is_normal) produce None.
     if ratio.abs() > 1.0 {
         return f64::NAN;
     }
-    let term_angle = Angle::from_radians(ratio.acos());
+    let initial_hour_angle = Angle::from_radians(ratio.acos());
 
     let adjusted_approx_transit = if after_transit {
-        approximate_transit + (term_angle.degrees / 360.0)
+        approximate_transit + (initial_hour_angle.degrees / 360.0)
     } else {
-        approximate_transit - (term_angle.degrees / 360.0)
+        approximate_transit - (initial_hour_angle.degrees / 360.0)
     };
 
-    let plane_angle =
+    let sidereal_angle =
         Angle::new(sidereal_time.degrees + (360.985647 * adjusted_approx_transit)).unwound();
-    let interpolated_angles = right_ascension
+    let interpolated_right_ascension = right_ascension
         .interpolated(adjusted_approx_transit)
         .unwound();
     let declination_angle = Angle::new(declination.interpolated_value(adjusted_approx_transit));
-    let adjusted_angles = plane_angle - longitude_angle - interpolated_angles;
+    let adjusted_hour_angle = sidereal_angle - longitude_angle - interpolated_right_ascension;
     let celestial_body_altitude = altitude_of_celestial_body(
         coordinates.latitude_angle(),
         declination_angle,
-        adjusted_angles,
+        adjusted_hour_angle,
     );
-    let term3 = (celestial_body_altitude - angle).degrees;
-    let term4 = 360.0
+    let altitude_difference_term = (celestial_body_altitude - angle).degrees;
+    let correction_denominator_term = 360.0
         * declination_angle.radians().cos()
         * coordinates.latitude_angle().radians().cos()
-        * adjusted_angles.radians().sin();
+        * adjusted_hour_angle.radians().sin();
 
-    let angle_delta =
-        if term4.abs() < 1e-6 || term_angle.degrees < 1.0 || term_angle.degrees > 179.0 {
-            // Near transit the correction denominator vanishes and the
-            // Newton step becomes unreliable (Meeus p. 102).  Also skip
-            // when the first-pass hour angle is below 1 °RA (~4 min of
-            // time): the altitude curve is too flat for a safe correction.
-            // Return the first-pass acos value directly.
-            0.0
-        } else {
-            term3 / term4
-        };
+    let angle_delta = if correction_denominator_term.abs() < 1e-6
+        || initial_hour_angle.degrees < 1.0
+        || initial_hour_angle.degrees > 179.0
+    {
+        // Near transit the correction denominator vanishes and the
+        // Newton step becomes unreliable (Meeus p. 102).  Also skip
+        // when the first-pass hour angle is below 1 °RA (~4 min of
+        // time): the altitude curve is too flat for a safe correction.
+        // Return the first-pass acos value directly.
+        0.0
+    } else {
+        altitude_difference_term / correction_denominator_term
+    };
 
     (adjusted_approx_transit + angle_delta) * 24.0
 }
@@ -274,11 +280,12 @@ pub fn corrected_hour_angle(
 ///
 /// Equation from Astronomical Algorithms page 24.
 pub fn interpolate(value: f64, previous_value: f64, next_value: f64, factor: f64) -> f64 {
-    let a = value - previous_value;
-    let b = next_value - value;
-    let c = b - a;
+    let previous_difference = value - previous_value;
+    let next_difference = next_value - value;
+    let second_difference = next_difference - previous_difference;
 
-    value + ((factor / 2.0) * (a + b + (factor * c)))
+    value
+        + ((factor / 2.0) * (previous_difference + next_difference + (factor * second_difference)))
 }
 
 /// Interpolation of three angles, accounting for angle unwinding.
@@ -290,11 +297,17 @@ pub fn interpolate_angles(
     next_value: Angle,
     factor: f64,
 ) -> Angle {
-    let a = (value - previous_value).unwound();
-    let b = (next_value - value).unwound();
-    let c = b - a;
+    let previous_difference = (value - previous_value).unwound();
+    let next_difference = (next_value - value).unwound();
+    let second_difference = next_difference - previous_difference;
 
-    Angle::new(value.degrees + ((factor / 2.0) * (a.degrees + b.degrees + (factor * c.degrees))))
+    Angle::new(
+        value.degrees
+            + ((factor / 2.0)
+                * (previous_difference.degrees
+                    + next_difference.degrees
+                    + (factor * second_difference.degrees))),
+    )
 }
 
 pub(crate) struct InterpolatedAngle {
@@ -337,13 +350,17 @@ pub fn julian_day(year: i32, month: i32, day: i32, hours: f64) -> f64 {
     let adjusted_month: i32 = if month > 2 { month } else { month + 12 };
     let adjusted_day: f64 = (day as f64) + (hours / 24.0);
 
-    let a: i32 = adjusted_year / 100;
-    let b: i32 = 2 - a + (a / 4);
+    let century: i32 = adjusted_year / 100;
+    let gregorian_correction: i32 = 2 - century + (century / 4);
 
-    let i0: i32 = (365.25 * ((adjusted_year as f64) + 4716.0)) as i32;
-    let i1: i32 = (30.6001 * ((adjusted_month as f64) + 1.0)) as i32;
+    let days_from_epoch: i32 = (365.25 * ((adjusted_year as f64) + 4716.0)) as i32;
+    let days_from_month: i32 = (30.6001 * ((adjusted_month as f64) + 1.0)) as i32;
 
-    (i0 as f64) + (i1 as f64) + adjusted_day + (b as f64) - 1524.5
+    (days_from_epoch as f64)
+        + (days_from_month as f64)
+        + adjusted_day
+        + (gregorian_correction as f64)
+        - 1524.5
 }
 
 /// Julian century from the J2000.0 epoch.

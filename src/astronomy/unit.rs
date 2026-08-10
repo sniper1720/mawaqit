@@ -8,12 +8,12 @@ use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike};
 /// Normalize a value to a given scale.
 pub trait Normalize {
     #[must_use]
-    fn normalized_to_scale(&self, max: f64) -> f64;
+    fn normalized_to_scale(&self, modulus: f64) -> f64;
 }
 
 impl Normalize for f64 {
-    fn normalized_to_scale(&self, max: f64) -> f64 {
-        self - (max * (self / max).floor())
+    fn normalized_to_scale(&self, modulus: f64) -> f64 {
+        self - (modulus * (self / modulus).floor())
     }
 }
 
@@ -31,9 +31,6 @@ pub trait Stride {
     /// Adjust time by the given number of minutes (positive or negative).
     #[must_use]
     fn adjust_time(&self, minutes: i64) -> Self;
-    /// Move one day forward or backward, wrapping year boundaries as needed.
-    #[must_use]
-    fn next_date(&self, fwd: bool) -> Self;
     /// Round to the nearest minute using the given rounding rule.
     #[must_use]
     fn rounded_minute(&self, rounding: Rounding) -> Self;
@@ -41,11 +38,11 @@ pub trait Stride {
 
 impl<Tz: TimeZone> Stride for DateTime<Tz> {
     fn tomorrow(&self) -> Self {
-        self.next_date(true)
+        offset_date(self, 1)
     }
 
     fn yesterday(&self) -> Self {
-        self.next_date(false)
+        offset_date(self, -1)
     }
 
     fn julian_day(&self) -> f64 {
@@ -82,30 +79,26 @@ impl<Tz: TimeZone> Stride for DateTime<Tz> {
             .checked_add_signed(Duration::seconds(minutes * 60))
             .expect("time adjustment overflowed")
     }
+}
 
-    fn next_date(&self, fwd: bool) -> Self {
-        let ordinal = if fwd {
-            self.ordinal() + 1
-        } else {
-            self.ordinal() - 1
-        };
+fn offset_date<Tz: TimeZone>(date: &DateTime<Tz>, days: i64) -> DateTime<Tz> {
+    let ordinal = date.ordinal() as i64 + days;
 
-        match self.with_ordinal(ordinal) {
-            Some(dt) => dt,
-            None => {
-                if fwd {
-                    self.with_year(self.year() + 1)
-                        .expect("year + 1 is always valid")
-                        .with_ordinal(1)
-                        .expect("ordinal 1 exists in every year")
-                } else {
-                    self.with_year(self.year() - 1)
-                        .expect("year - 1 is always valid")
-                        .with_month(12)
-                        .expect("December exists in every year")
-                        .with_day(31)
-                        .expect("December 31 exists in every year")
-                }
+    match date.with_ordinal(ordinal as u32) {
+        Some(dt) => dt,
+        None => {
+            if days > 0 {
+                date.with_year(date.year() + 1)
+                    .expect("year + 1 is always valid")
+                    .with_ordinal(1)
+                    .expect("ordinal 1 exists in every year")
+            } else {
+                date.with_year(date.year() - 1)
+                    .expect("year - 1 is always valid")
+                    .with_month(12)
+                    .expect("December exists in every year")
+                    .with_day(31)
+                    .expect("December 31 exists in every year")
             }
         }
     }
@@ -255,28 +248,24 @@ mod tests {
 
     #[test]
     fn normalize_value() {
-        let v = (2.0_f64).normalized_to_scale(-5.0);
-        assert!((v - (-3.0)).abs() < f64::EPSILON, "got {v}, expected -3.0");
-        let v = (-4.0_f64).normalized_to_scale(-5.0);
-        assert!((v - (-4.0)).abs() < f64::EPSILON, "got {v}, expected -4.0");
-        let v = (-6.0_f64).normalized_to_scale(-5.0);
-        assert!((v - (-1.0)).abs() < f64::EPSILON, "got {v}, expected -1.0");
-
-        let v = (-1.0_f64).normalized_to_scale(24.0);
-        assert!((v - 23.0).abs() < 1e-15, "got {v}, expected 23.0");
-        let v = (1.0_f64).normalized_to_scale(24.0);
-        assert!((v - 1.0).abs() < f64::EPSILON, "got {v}, expected 1.0");
-        let v = (49.0_f64).normalized_to_scale(24.0);
-        assert!((v - 1.0).abs() < f64::EPSILON, "got {v}, expected 1.0");
-
-        let v = (361.0_f64).normalized_to_scale(360.0);
-        assert!((v - 1.0).abs() < f64::EPSILON, "got {v}, expected 1.0");
-        let v = (360.0_f64).normalized_to_scale(360.0);
-        assert!((v - 0.0).abs() < f64::EPSILON, "got {v}, expected 0.0");
-        let v = (259.0_f64).normalized_to_scale(360.0);
-        assert!((v - 259.0).abs() < f64::EPSILON, "got {v}, expected 259.0");
-        let v = (2592.0_f64).normalized_to_scale(360.0);
-        assert!((v - 72.0).abs() < f64::EPSILON, "got {v}, expected 72.0");
+        for (input, scale, expected) in [
+            (2.0_f64, -5.0, -3.0),
+            (-4.0_f64, -5.0, -4.0),
+            (-6.0_f64, -5.0, -1.0),
+            (-1.0_f64, 24.0, 23.0),
+            (1.0_f64, 24.0, 1.0),
+            (49.0_f64, 24.0, 1.0),
+            (361.0_f64, 360.0, 1.0),
+            (360.0_f64, 360.0, 0.0),
+            (259.0_f64, 360.0, 259.0),
+            (2592.0_f64, 360.0, 72.0),
+        ] {
+            let normalized = input.normalized_to_scale(scale);
+            assert!(
+                (normalized - expected).abs() < f64::EPSILON,
+                "got {normalized}, expected {expected}"
+            );
+        }
     }
 
     #[test]

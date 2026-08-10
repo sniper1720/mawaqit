@@ -19,7 +19,7 @@ fn main() {
 
         let current = prayers.current();
         let next = prayers.next();
-        let (hours, minutes) = prayers.time_remaining();
+        let remaining = prayers.time_remaining_at(Utc::now());
         let next_local = prayers.time(next).with_timezone(&Local);
         let current_time = prayers.current_prayer_time().with_timezone(&Local);
 
@@ -29,6 +29,8 @@ fn main() {
              Remaining: {hours}h {minutes:02}m   ",
             time = current_time.format("%H:%M"),
             next_time = next_local.format("%H:%M"),
+            hours = remaining.num_hours(),
+            minutes = remaining.num_minutes() % 60,
         );
         stdout().flush().expect("flush failed");
 

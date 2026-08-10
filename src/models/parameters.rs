@@ -2,10 +2,18 @@ use super::adjustments::TimeAdjustment;
 use super::high_altitude_rule::HighLatitudeRule;
 use super::madhab::Madhab;
 use super::method::Method;
-use super::polar::PolarFallback;
+use super::polar::PolarEstimation;
 use super::prayer::Prayer;
 use super::rounding::Rounding;
 use super::shafaq::Shafaq;
+
+/// Night-portion fractions applied by high-latitude fallbacks,
+/// `fajr` and `isha` as fractions of the night.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct NightPortions {
+    pub fajr: f64,
+    pub isha: f64,
+}
 
 /// Settings that determine prayer time calculation:
 /// angles, method, madhab, high-latitude rule, rounding, polar fallback, and adjustments.
@@ -20,7 +28,7 @@ pub struct Parameters {
     pub isha_interval: i32,
     pub madhab: Madhab,
     pub high_latitude_rule: HighLatitudeRule,
-    pub polar_fallback: PolarFallback,
+    pub polar_estimation: Option<PolarEstimation>,
     pub adjustments: TimeAdjustment,
     pub method_adjustments: TimeAdjustment,
     pub rounding: Rounding,
@@ -40,7 +48,7 @@ impl Parameters {
             isha_interval: 0,
             madhab: Madhab::Shafi,
             high_latitude_rule: HighLatitudeRule::MiddleOfTheNight,
-            polar_fallback: PolarFallback::None,
+            polar_estimation: None,
             adjustments: TimeAdjustment::default(),
             method_adjustments: TimeAdjustment::default(),
             rounding: Rounding::Nearest,
@@ -48,19 +56,28 @@ impl Parameters {
         }
     }
 
-    /// Return the night-portion fractions `(fajr, isha)` determined by the
-    /// active [`HighLatitudeRule`].
+    /// Return the night-portion fractions ([`NightPortions`]) determined by
+    /// the active [`HighLatitudeRule`].
     ///
-    /// - `MiddleOfTheNight` → `(0.5, 0.5)`
-    /// - `SeventhOfTheNight` → `(1/7, 1/7)`
-    /// - `TwilightAngle` → `(fajr_angle/60, isha_angle/60)`
-    /// - `Recommended` → resolves to MiddleOfTheNight or LRE in [`PrayerTimes::try_new`]
-    /// - `LocalRelativeEstimation` → resolves internally via [`PrayerTimes::try_new`]
-    pub(crate) fn night_portions(&self) -> (f64, f64) {
+    /// - `MiddleOfTheNight` → `{ fajr: 0.5, isha: 0.5 }`
+    /// - `SeventhOfTheNight` → `{ fajr: 1/7, isha: 1/7 }`
+    /// - `TwilightAngle` → `{ fajr: fajr_angle/60, isha: isha_angle/60 }`
+    /// - `Recommended` → resolves to MiddleOfTheNight or LRE in [`crate::schedule::PrayerTimes::try_new`]
+    /// - `LocalRelativeEstimation` → resolves internally via [`crate::schedule::PrayerTimes::try_new`]
+    pub(crate) fn night_portions(&self) -> NightPortions {
         match self.high_latitude_rule {
-            HighLatitudeRule::MiddleOfTheNight => (1.0 / 2.0, 1.0 / 2.0),
-            HighLatitudeRule::SeventhOfTheNight => (1.0 / 7.0, 1.0 / 7.0),
-            HighLatitudeRule::TwilightAngle => (self.fajr_angle / 60.0, self.isha_angle / 60.0),
+            HighLatitudeRule::MiddleOfTheNight => NightPortions {
+                fajr: 1.0 / 2.0,
+                isha: 1.0 / 2.0,
+            },
+            HighLatitudeRule::SeventhOfTheNight => NightPortions {
+                fajr: 1.0 / 7.0,
+                isha: 1.0 / 7.0,
+            },
+            HighLatitudeRule::TwilightAngle => NightPortions {
+                fajr: self.fajr_angle / 60.0,
+                isha: self.isha_angle / 60.0,
+            },
             HighLatitudeRule::LocalRelativeEstimation => {
                 unreachable!("LRE resolves in try_new() before night_portions() is called")
             }
@@ -94,7 +111,7 @@ pub struct Configuration {
     isha_interval: i32,
     madhab: Madhab,
     high_latitude_rule: HighLatitudeRule,
-    polar_fallback: PolarFallback,
+    polar_estimation: Option<PolarEstimation>,
     adjustments: TimeAdjustment,
     method_adjustments: TimeAdjustment,
     rounding: Rounding,
@@ -113,7 +130,7 @@ impl Configuration {
             isha_interval: 0,
             madhab: Madhab::Shafi,
             high_latitude_rule: HighLatitudeRule::MiddleOfTheNight,
-            polar_fallback: PolarFallback::None,
+            polar_estimation: None,
             adjustments: TimeAdjustment::default(),
             method_adjustments: TimeAdjustment::default(),
             rounding: Rounding::Nearest,
@@ -163,8 +180,12 @@ impl Configuration {
     }
 
     /// Set the strategy for handling polar day/night latitudes.
-    pub fn polar_fallback(&mut self, fallback: PolarFallback) -> &mut Configuration {
-        self.polar_fallback = fallback;
+    ///
+    /// Leave unset (the default) to use the true latitude; `try_new()`
+    /// then returns an informative error when sunrise or sunset (or the
+    /// Asr shadow angle) does not occur on the requested date.
+    pub fn polar_estimation(&mut self, method: PolarEstimation) -> &mut Configuration {
+        self.polar_estimation = Some(method);
         self
     }
 
@@ -190,13 +211,6 @@ impl Configuration {
         self
     }
 
-    /// Set the twilight phenomenon used by the Moonsighting Committee
-    /// method for Isha calculation (General, Ahmer, or Abyad).
-    pub fn shafaq(&mut self, value: Shafaq) -> &mut Configuration {
-        self.shafaq = value;
-        self
-    }
-
     /// Finalise the builder and return the [`Parameters`].
     #[must_use]
     pub fn done(&self) -> Parameters {
@@ -208,7 +222,7 @@ impl Configuration {
             isha_interval: self.isha_interval,
             madhab: self.madhab,
             high_latitude_rule: self.high_latitude_rule,
-            polar_fallback: self.polar_fallback,
+            polar_estimation: self.polar_estimation,
             adjustments: self.adjustments,
             method_adjustments: self.method_adjustments,
             rounding: self.rounding,
@@ -234,8 +248,8 @@ mod tests {
     fn calculated_night_portions_middle_of_the_night() {
         let params = Parameters::new(18.0, 18.0);
 
-        assert_eq!(params.night_portions().0, 1.0 / 2.0);
-        assert_eq!(params.night_portions().1, 1.0 / 2.0);
+        assert_eq!(params.night_portions().fajr, 1.0 / 2.0);
+        assert_eq!(params.night_portions().isha, 1.0 / 2.0);
     }
 
     #[test]
@@ -244,8 +258,8 @@ mod tests {
             .high_latitude_rule(HighLatitudeRule::SeventhOfTheNight)
             .done();
 
-        assert_eq!(params.night_portions().0, 1.0 / 7.0);
-        assert_eq!(params.night_portions().1, 1.0 / 7.0);
+        assert_eq!(params.night_portions().fajr, 1.0 / 7.0);
+        assert_eq!(params.night_portions().isha, 1.0 / 7.0);
     }
 
     #[test]
@@ -254,8 +268,8 @@ mod tests {
             .high_latitude_rule(HighLatitudeRule::TwilightAngle)
             .done();
 
-        assert_eq!(params.night_portions().0, 10.0 / 60.0);
-        assert_eq!(params.night_portions().1, 15.0 / 60.0);
+        assert_eq!(params.night_portions().fajr, 10.0 / 60.0);
+        assert_eq!(params.night_portions().isha, 15.0 / 60.0);
     }
 
     #[test]

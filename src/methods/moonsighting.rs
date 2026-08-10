@@ -13,9 +13,13 @@ pub fn season_adjusted_morning_twilight(
     year: u32,
     sunrise: DateTime<Utc>,
 ) -> DateTime<Utc> {
-    let dyy = days_since_solstice(day, year, latitude) as f64;
-    let adjustment =
-        twilight_adjustments(AdjustmentDaytime::Morning, latitude, dyy, Shafaq::General);
+    let solstice_days = days_since_solstice(day, year, latitude) as f64;
+    let adjustment = twilight_adjustments(
+        AdjustmentDaytime::Morning,
+        latitude,
+        solstice_days,
+        Shafaq::General,
+    );
 
     let rounded_adjustment = (adjustment * -60.0).round() as i64;
     sunrise
@@ -32,8 +36,9 @@ pub fn season_adjusted_evening_twilight(
     sunset: DateTime<Utc>,
     shafaq: Shafaq,
 ) -> DateTime<Utc> {
-    let dyy = days_since_solstice(day, year, latitude) as f64;
-    let adjustment = twilight_adjustments(AdjustmentDaytime::Evening, latitude, dyy, shafaq);
+    let solstice_days = days_since_solstice(day, year, latitude) as f64;
+    let adjustment =
+        twilight_adjustments(AdjustmentDaytime::Evening, latitude, solstice_days, shafaq);
 
     let rounded_adjustment = (adjustment * 60.0).round() as i64;
     let adjusted_date = sunset
@@ -67,23 +72,35 @@ pub fn days_since_solstice(day_of_year: u32, year: u32, latitude: f64) -> u32 {
 fn twilight_adjustments(
     daytime: AdjustmentDaytime,
     latitude: f64,
-    dyy: f64,
+    days_since_solstice: f64,
     shafaq: Shafaq,
 ) -> f64 {
     let adjustment_values = twilight_adjustment_values(daytime, latitude, shafaq);
 
-    if (0.00..=90.0).contains(&dyy) {
-        adjustment_values.a + (adjustment_values.b - adjustment_values.a) / 91.0 * dyy
-    } else if (91.0..=136.0).contains(&dyy) {
-        adjustment_values.b + (adjustment_values.c - adjustment_values.b) / 46.0 * (dyy - 91.0)
-    } else if (137.0..=182.0).contains(&dyy) {
-        adjustment_values.c + (adjustment_values.d - adjustment_values.c) / 46.0 * (dyy - 137.0)
-    } else if (183.0..=228.0).contains(&dyy) {
-        adjustment_values.d + (adjustment_values.c - adjustment_values.d) / 46.0 * (dyy - 183.0)
-    } else if (229.0..=274.0).contains(&dyy) {
-        adjustment_values.c + (adjustment_values.b - adjustment_values.c) / 46.0 * (dyy - 229.0)
+    if (0.00..=90.0).contains(&days_since_solstice) {
+        adjustment_values.december_solstice
+            + (adjustment_values.equinox - adjustment_values.december_solstice) / 91.0
+                * days_since_solstice
+    } else if (91.0..=136.0).contains(&days_since_solstice) {
+        adjustment_values.equinox
+            + (adjustment_values.cross_quarter - adjustment_values.equinox) / 46.0
+                * (days_since_solstice - 91.0)
+    } else if (137.0..=182.0).contains(&days_since_solstice) {
+        adjustment_values.cross_quarter
+            + (adjustment_values.june_solstice - adjustment_values.cross_quarter) / 46.0
+                * (days_since_solstice - 137.0)
+    } else if (183.0..=228.0).contains(&days_since_solstice) {
+        adjustment_values.june_solstice
+            + (adjustment_values.cross_quarter - adjustment_values.june_solstice) / 46.0
+                * (days_since_solstice - 183.0)
+    } else if (229.0..=274.0).contains(&days_since_solstice) {
+        adjustment_values.cross_quarter
+            + (adjustment_values.equinox - adjustment_values.cross_quarter) / 46.0
+                * (days_since_solstice - 229.0)
     } else {
-        adjustment_values.b + (adjustment_values.a - adjustment_values.b) / 91.0 * (dyy - 275.0)
+        adjustment_values.equinox
+            + (adjustment_values.december_solstice - adjustment_values.equinox) / 91.0
+                * (days_since_solstice - 275.0)
     }
 }
 
@@ -95,10 +112,10 @@ enum AdjustmentDaytime {
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 struct TwilightAdjustmentValues {
-    a: f64,
-    b: f64,
-    c: f64,
-    d: f64,
+    december_solstice: f64,
+    equinox: f64,
+    cross_quarter: f64,
+    june_solstice: f64,
 }
 
 fn twilight_adjustment_values(
@@ -108,30 +125,30 @@ fn twilight_adjustment_values(
 ) -> TwilightAdjustmentValues {
     if daytime == AdjustmentDaytime::Morning {
         TwilightAdjustmentValues {
-            a: 75.0 + ((28.65 / 55.0) * latitude.abs()),
-            b: 75.0 + ((19.44 / 55.0) * latitude.abs()),
-            c: 75.0 + ((32.74 / 55.0) * latitude.abs()),
-            d: 75.0 + ((48.10 / 55.0) * latitude.abs()),
+            december_solstice: 75.0 + ((28.65 / 55.0) * latitude.abs()),
+            equinox: 75.0 + ((19.44 / 55.0) * latitude.abs()),
+            cross_quarter: 75.0 + ((32.74 / 55.0) * latitude.abs()),
+            june_solstice: 75.0 + ((48.10 / 55.0) * latitude.abs()),
         }
     } else {
         match shafaq {
             Shafaq::General => TwilightAdjustmentValues {
-                a: 75.0 + ((25.60 / 55.0) * latitude.abs()),
-                b: 75.0 + ((2.050 / 55.0) * latitude.abs()),
-                c: 75.0 - ((9.210 / 55.0) * latitude.abs()),
-                d: 75.0 + ((6.140 / 55.0) * latitude.abs()),
+                december_solstice: 75.0 + ((25.60 / 55.0) * latitude.abs()),
+                equinox: 75.0 + ((2.050 / 55.0) * latitude.abs()),
+                cross_quarter: 75.0 - ((9.210 / 55.0) * latitude.abs()),
+                june_solstice: 75.0 + ((6.140 / 55.0) * latitude.abs()),
             },
             Shafaq::Ahmer => TwilightAdjustmentValues {
-                a: 62.0 + ((17.40 / 55.0) * latitude.abs()),
-                b: 62.0 - ((7.160 / 55.0) * latitude.abs()),
-                c: 62.0 + ((5.120 / 55.0) * latitude.abs()),
-                d: 62.0 + ((19.44 / 55.0) * latitude.abs()),
+                december_solstice: 62.0 + ((17.40 / 55.0) * latitude.abs()),
+                equinox: 62.0 - ((7.160 / 55.0) * latitude.abs()),
+                cross_quarter: 62.0 + ((5.120 / 55.0) * latitude.abs()),
+                june_solstice: 62.0 + ((19.44 / 55.0) * latitude.abs()),
             },
             Shafaq::Abyad => TwilightAdjustmentValues {
-                a: 75.0 + ((25.60 / 55.0) * latitude.abs()),
-                b: 75.0 + ((7.160 / 55.0) * latitude.abs()),
-                c: 75.0 + ((36.84 / 55.0) * latitude.abs()),
-                d: 75.0 + ((81.84 / 55.0) * latitude.abs()),
+                december_solstice: 75.0 + ((25.60 / 55.0) * latitude.abs()),
+                equinox: 75.0 + ((7.160 / 55.0) * latitude.abs()),
+                cross_quarter: 75.0 + ((36.84 / 55.0) * latitude.abs()),
+                june_solstice: 75.0 + ((81.84 / 55.0) * latitude.abs()),
             },
         }
     }

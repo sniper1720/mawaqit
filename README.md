@@ -12,7 +12,7 @@ Add `mawaqit` under `[dependencies]` in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mawaqit = "0.2"
+mawaqit = "0.3"
 ```
 
 Then set your location, date, and calculation method to get prayer times:
@@ -51,7 +51,7 @@ let coordinates = Coordinates::new(31.7683, 35.2137);
 
 ### Date
 
-Use `NaiveDate` to avoid timezone confusion. Only the year, month, and day are used  (All other components will be ignored).
+Use `NaiveDate` to avoid timezone confusion. Only the year, month, and day are used (all other components are ignored).
 
 ```rust
 let date = NaiveDate::from_ymd_opt(2026, 6, 21).unwrap();
@@ -76,7 +76,7 @@ let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 | `isha_interval`     | `i32`              | Minutes after Maghrib to set Isha (overrides angle when > 0).            |
 | `madhab`            | `Madhab`           | Asr calculation (Shafi or Hanafi).                                       |
 | `high_latitude_rule`| `HighLatitudeRule` | Fallback rule for high latitudes. Default: `MiddleOfTheNight`.           |
-| `polar_fallback`    | `PolarFallback`    | Fallback rule for polar (>66.6°). Default: `None`.                  |
+| `polar_estimation`  | `Option<PolarEstimation>` | Estimation method for polar (>66.6°). Default: `None` (true latitude).     |
 | `adjustments`       | `TimeAdjustment`   | Custom per-prayer offsets in minutes (user adjustments).                 |
 | `method_adjustments`| `TimeAdjustment`   | Built-in per-prayer offsets from the method preset.                      |
 | `rounding`          | `Rounding`         | Rounding behavior: `Nearest`, `Up`, or `None`.                           |
@@ -91,7 +91,7 @@ Provides preset configuration for calculating prayer times.
 | `MuslimWorldLeague`      | Muslim World League. Fajr 18°, Isha 17°.                                                                                        |
 | `Egyptian`               | Egyptian General Authority of Survey. Fajr 19.5°, Isha 17.5°.                                                                   |
 | `Karachi`                | University of Islamic Sciences, Karachi. Fajr 18°, Isha 18°.                                                                     |
-| `UmmAlQura`              | Umm al-Qura University, Makkah. Fajr 18.5°, Isha fixed 90 min after Maghrib. Add +30 min during Ramadan.                        |
+| `UmmAlQura`              | Umm al-Qura University, Makkah. Fajr 18.5°, Isha fixed 90 min after Maghrib. Add +30 min to Isha manually during Ramadan — not applied automatically. |
 | `Dubai`                  | Used in UAE. Fajr 18.2°, Isha 18.2°, with 3 min offsets for sunrise, Dhuhr, Asr, Maghrib.                                       |
 | `Qatar`                  | Same Isha interval as UmmAlQura, Fajr 18°.                                                                                      |
 | `Kuwait`                 | Fajr 18°, Isha 17.5°.                                                                                                           |
@@ -122,7 +122,7 @@ Fallback approximations for Fajr and Isha when the sun does not reach the requir
 | `MiddleOfTheNight`  | Fajr won't be earlier than the midpoint of the night; Isha won't be later. Prevents Fajr and Isha from crossing boundaries. Default. |
 | `SeventhOfTheNight` | The night is divided into seven equal parts. Isha begins after the first seventh; Fajr at the beginning of the last seventh. |
 | `TwilightAngle`     | The fajr/isha angle α determines a fraction t = α ÷ 60 of the night. Isha begins after the first t part; Fajr is calculated similarly. Example: 15° → t = 0.25 → Isha after the first quarter of the night. |
-| `LocalRelativeEstimation` | Scans the year to compute the average Fajr/Isha proportion of the night from days where the angle is reachable. Applies that proportion as fallback with ±5 min/day smoothing at transitions. Adopted by MWL Fiqh Council, August 2009. Recommended for Zone 2 (48.6–66.6°). |
+| `LocalRelativeEstimation` | Scans the year to compute the average Isha proportion of the night from days where the angle is reachable, applied symmetrically to Fajr. Uses that proportion as fallback with ±5 min/day smoothing at transitions. Adopted by MWL Fiqh Council, August 2009. Recommended for Zone 2 (48.6–66.6°). |
 | `Recommended`       | Automatically selects the right rule: LocalRelativeEstimation for 48.6–66.6°, MiddleOfTheNight elsewhere. |
 
 **Defer to `try_new()`** — set the variant on `params`:
@@ -135,15 +135,24 @@ params.high_latitude_rule = HighLatitudeRule::Recommended;
 let rule = HighLatitudeRule::recommended(Coordinates::new(50.85, 4.35));
 ```
 
-### PolarFallback
+### PolarEstimation
 
-Fallback for polar latitudes (>66.6°) where the sun may not rise or set for extended periods. All prayer times use the resolved (nearest/reference) latitude.
+Estimation method for polar latitudes (>66.6°) where the sun may not rise or set for extended periods. All prayer times use the resolved (nearest/reference) latitude.
 
-| Value              | Description                                                                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `None`             | No polar adjustment. `try_new()` returns `Err` at polar latitudes — use for custom fallback or notification. Default.          |
-| `NearestLatitude`  | Affected prayers calculated using the nearest latitude where astronomical signs are distinguishable. Based on the Board of Grand Scholars of Saudi Arabia and MWL 1986 Resolution 7. |
-| `Reference45`      | Affected prayers calculated using a fixed reference latitude of 45°. Based on MWL 1986 Resolution 7, confirmed by the European Council for Fatwa and Research. |
+| Value             | Description                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NearestLatitude` | Affected prayers calculated using the nearest latitude where astronomical signs are distinguishable. Based on the Board of Grand Scholars of Saudi Arabia and MWL 1986 Resolution 7. |
+| `Reference45`     | Affected prayers calculated using a fixed reference latitude of 45°. Based on MWL 1986 Resolution 7, confirmed by the European Council for Fatwa and Research. |
+
+**Set the variant on `params`**:
+```rust
+params.polar_estimation = Some(PolarEstimation::NearestLatitude);
+```
+
+**No estimation (default)** — true latitude:
+```rust
+params.polar_estimation = None;
+```
 
 ### Shafaq
 
@@ -155,7 +164,7 @@ Used by the MoonsightingCommittee method to determine Isha twilight.
 | `Ahmer`   | Red twilight. Earlier Isha. Used by Shafi, Maliki, Hanbali.                                         |
 | `Abyad`   | White twilight. Later Isha. Used by Hanafi.                                                         |
 
-> **Note:** Auto-selected from Madhab in `Configuration::with()`. Override with `params.shafaq = ...`.
+> **Note:** Auto-selected from Madhab in `Configuration::with()` (Shafi → Ahmer, Hanafi → Abyad). Override with `params.shafaq = ...`.
 
 ```rust
 use mawaqit::Shafaq;
@@ -198,18 +207,25 @@ params.adjustments = adj;
 
 ### PrayerTimes
 
-The `PrayerTimes` struct holds all computed prayer times as `DateTime<Utc>`. Convert to local time using chrono's timezone methods.
-
-| Method            | Returns             | Description                                      |
-| ----------------- | ------------------- | ------------------------------------------------ |
-| `time(prayer)`    | `DateTime<Utc>`     | Time of a specific prayer.                       |
-| `current()`       | `Prayer`            | The prayer currently in effect.                  |
-| `next()`          | `Prayer`            | The upcoming prayer.                             |
-| `time_remaining()`| `(u32, u32)`        | Hours and minutes until the next prayer.         |
+The `PrayerTimes` struct holds all computed prayer times as `DateTime<Utc>`. Convert to local time using chrono's timezone methods:
 
 ```rust
-let (hours, minutes) = schedule.time_remaining();
-println!("Next: {} in {}h {}m", schedule.next().name(), hours, minutes);
+let local_fajr = prayers.time(Prayer::Fajr).with_timezone(&Local);
+```
+
+| Method                | Returns             | Description                                      |
+| --------------------- | ------------------- | ------------------------------------------------ |
+| `time(prayer)`        | `DateTime<Utc>`     | Time of a specific prayer.                       |
+| `current()`           | `Prayer`            | The prayer currently in effect.                  |
+| `current_at(now)`     | `Prayer`            | The prayer in effect at a given instant.         |
+| `next()`              | `Prayer`            | The upcoming prayer.                             |
+| `next_at(now)`        | `Prayer`            | The prayer that begins next after a given instant. |
+| `time_remaining_at(now)` | `Duration`       | Exact time until the next prayer; negative once it has started. |
+| `resolved_latitude()` | `f64`               | Latitude actually used for solar calculations — the true latitude unless a `polar_estimation` fallback resolved a reference one. |
+
+```rust
+let remaining = prayers.time_remaining_at(Utc::now());
+println!("Next: {} in {:02}h {:02}m", prayers.next().name(), remaining.num_hours(), remaining.num_minutes() % 60);
 ```
 
 ### Prayer
@@ -218,12 +234,16 @@ println!("Next: {} in {}h {}m", schedule.next().name(), hours, minutes);
 |-----------------|--------------------------|------------------------------------------------|
 | `Fajr`          | Dawn                     | `"Fajr"`                                       |
 | `Sunrise`       | Sunrise                  | `"Sunrise"`                                    |
-| `Dhuhr`         | Noon                     | `"Dhuhr"` (or `"Jumua"` on Friday)             |
+| `Dhuhr`         | Noon                     | `"Dhuhr"`                                       |
 | `Asr`           | Afternoon                | `"Asr"`                                        |
 | `Maghrib`       | Sunset                   | `"Maghrib"`                                    |
 | `Isha`          | Night                    | `"Isha"`                                       |
 | `Qiyam`         | Last third of the night  | `"Qiyam"`                                      |
 | `FajrTomorrow`  | Next day's Fajr          | `"Fajr"`                                       |
+
+> **Note:** `name()` always returns the base English label. To render the
+> Friday prayer as `"Jumua"`, use `Prayer::Dhuhr.name_on(date)` — it returns
+> `"Jumua"` when `date` is a Friday and `"Dhuhr"` otherwise.
 
 ## Qibla direction
 
@@ -234,7 +254,7 @@ let brussels  = Coordinates::new(50.85, 4.35);
 let qiblah    = Qiblah::new(brussels);
 
 println!("{}", qiblah);           // Display: 123.4783
-println!("{}", qiblah.value());   // Raw f64: 123.4783420
+println!("{}", qiblah.value());   // Raw f64: 123.47834200257309
 ```
 
 ## Full example
