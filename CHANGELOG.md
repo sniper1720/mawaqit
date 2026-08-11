@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.3.0] — 2026-08-09
+## [0.3.0] — 2026-08-11
 
 ### Breaking
 
@@ -27,6 +27,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- `Parameters::maghrib_angle` now takes effect (was documented but not applied): a value > 0°
+  computes Maghrib at that solar-depression angle, with a sunset fallback when the angle is
+  unreachable at high latitude; 0 keeps geometric sunset.
 - Countdown rounding: a remaining time of 1h59m59s no longer reports `(1, 60)`.
 - Countdown no longer flips a minute at prayer boundaries (single clock read instead of two).
 - LocalRelativeEstimation times no longer drift with the run year.
