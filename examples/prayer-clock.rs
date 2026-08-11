@@ -5,14 +5,14 @@ use chrono::Local;
 use mawaqit::prelude::*;
 
 fn main() {
-    let coords = Coordinates::new(50.85, 4.35);
+    let coordinates = Coordinates::new(50.85, 4.35);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
     loop {
         let today = Local::now().date_naive();
         let prayers = PrayerSchedule::new()
             .on(today)
-            .for_location(coords)
+            .for_location(coordinates)
             .with_configuration(params)
             .calculate()
             .expect("prayer times calculation failed");

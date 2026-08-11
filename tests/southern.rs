@@ -6,10 +6,10 @@ use mawaqit::prelude::*;
 #[test]
 fn buenos_aires_summer() {
     let date = NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid date");
-    let coords = Coordinates::new(-34.6, -58.4);
+    let coordinates = Coordinates::new(-34.6, -58.4);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let times = PrayerTimes::try_new(date, coords, params).unwrap();
+    let times = PrayerTimes::try_new(date, coordinates, params).unwrap();
 
     assert!(
         times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
@@ -38,10 +38,10 @@ fn buenos_aires_summer() {
 #[test]
 fn sydney_winter() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(-33.9, 151.2);
+    let coordinates = Coordinates::new(-33.9, 151.2);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let times = PrayerTimes::try_new(date, coords, params).unwrap();
+    let times = PrayerTimes::try_new(date, coordinates, params).unwrap();
 
     assert!(
         times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
@@ -72,10 +72,10 @@ fn sydney_winter() {
 #[test]
 fn punta_arenas_summer_solstice() {
     let date = NaiveDate::from_ymd_opt(2026, 12, 21).expect("valid date");
-    let coords = Coordinates::new(-53.2, -70.9);
+    let coordinates = Coordinates::new(-53.2, -70.9);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let times = PrayerTimes::try_new(date, coords, params).unwrap();
+    let times = PrayerTimes::try_new(date, coordinates, params).unwrap();
 
     assert!(
         times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
@@ -105,10 +105,10 @@ fn punta_arenas_summer_solstice() {
 #[test]
 fn punta_arenas_winter_solstice() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(-53.2, -70.9);
+    let coordinates = Coordinates::new(-53.2, -70.9);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let times = PrayerTimes::try_new(date, coords, params).unwrap();
+    let times = PrayerTimes::try_new(date, coordinates, params).unwrap();
 
     assert!(
         times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
@@ -137,10 +137,10 @@ fn punta_arenas_winter_solstice() {
 #[test]
 fn equator_equinox() {
     let date = NaiveDate::from_ymd_opt(2026, 3, 20).expect("valid date");
-    let coords = Coordinates::new(0.0, 0.0);
+    let coordinates = Coordinates::new(0.0, 0.0);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let times = PrayerTimes::try_new(date, coords, params).unwrap();
+    let times = PrayerTimes::try_new(date, coordinates, params).unwrap();
 
     assert!(
         times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
@@ -168,10 +168,10 @@ fn equator_equinox() {
 #[test]
 fn sydney_equinox() {
     let date = NaiveDate::from_ymd_opt(2026, 9, 23).expect("valid date");
-    let coords = Coordinates::new(-33.9, 151.2);
+    let coordinates = Coordinates::new(-33.9, 151.2);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let times = PrayerTimes::try_new(date, coords, params).unwrap();
+    let times = PrayerTimes::try_new(date, coordinates, params).unwrap();
 
     assert!(
         times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),

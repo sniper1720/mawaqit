@@ -6,10 +6,10 @@ use mawaqit::prelude::*;
 #[test]
 fn france_integration() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(48.85, 2.35);
+    let coordinates = Coordinates::new(48.85, 2.35);
     let params = Configuration::with(Method::France, Madhab::Shafi);
 
-    let times = PrayerTimes::try_new(date, coords, params).unwrap();
+    let times = PrayerTimes::try_new(date, coordinates, params).unwrap();
 
     assert!(
         times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
@@ -38,13 +38,13 @@ fn france_integration() {
 #[test]
 fn algeria_integration() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(36.75, 3.04);
+    let coordinates = Coordinates::new(36.75, 3.04);
 
     let params_algeria = Configuration::with(Method::Algeria, Madhab::Shafi);
     let params_france = Configuration::with(Method::France, Madhab::Shafi);
 
-    let algeria_times = PrayerTimes::try_new(date, coords, params_algeria).unwrap();
-    let france_times = PrayerTimes::try_new(date, coords, params_france).unwrap();
+    let algeria_times = PrayerTimes::try_new(date, coordinates, params_algeria).unwrap();
+    let france_times = PrayerTimes::try_new(date, coordinates, params_france).unwrap();
 
     // Verify the +3 min Maghrib adjustment
     let maghrib_diff =

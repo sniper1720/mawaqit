@@ -10,8 +10,8 @@ fn main() {
     ];
 
     println!("Qibla direction from major cities:");
-    for (name, coords) in &locations {
-        let qiblah = Qiblah::new(*coords);
+    for (name, coordinates) in &locations {
+        let qiblah = Qiblah::new(*coordinates);
         println!("  {name:<12}  {qibla:>7.2}°", qibla = qiblah.value());
     }
 }

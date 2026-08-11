@@ -83,23 +83,23 @@ impl PolarEstimation {
 /// First tries to find a latitude where yesterday and tomorrow also
 /// work.  If the boundary is too tight (declination shifts ±0.02°/day),
 /// falls back to today-only.
-fn nearest_working_latitude(date: DateTime<Utc>, coords: &Coordinates, shadow: f64) -> f64 {
+fn nearest_working_latitude(date: DateTime<Utc>, coordinates: &Coordinates, shadow: f64) -> f64 {
     fn check(
         date: DateTime<Utc>,
-        coords: &Coordinates,
+        coordinates: &Coordinates,
         shadow: f64,
         require_adjacent: bool,
     ) -> Option<f64> {
-        let latitude_sign = coords.latitude.signum();
+        let latitude_sign = coordinates.latitude.signum();
         let mut lower_bound = 0.0_f64;
-        let mut upper_bound = coords.latitude.abs();
+        let mut upper_bound = coordinates.latitude.abs();
         let yesterday = date - Duration::days(1);
         let tomorrow = date + Duration::days(1);
 
         for _ in 0..24 {
             let probe_magnitude = (lower_bound + upper_bound) / 2.0;
             let probe_coordinates =
-                Coordinates::new(probe_magnitude * latitude_sign, coords.longitude);
+                Coordinates::new(probe_magnitude * latitude_sign, coordinates.longitude);
 
             let today_ok = SolarTime::new(date, probe_coordinates)
                 .is_ok_and(|st| st.time_for_shadow(shadow).is_some());
@@ -127,7 +127,7 @@ fn nearest_working_latitude(date: DateTime<Utc>, coords: &Coordinates, shadow: f
         }
     }
 
-    check(date, coords, shadow, true)
-        .or_else(|| check(date, coords, shadow, false))
+    check(date, coordinates, shadow, true)
+        .or_else(|| check(date, coordinates, shadow, false))
         .unwrap_or(0.0)
 }

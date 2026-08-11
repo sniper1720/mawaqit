@@ -1,14 +1,14 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use mawaqit::prelude::*;
 
-fn times_at(lat: f64, label: &str, date: NaiveDate, original_coords: Coordinates) {
+fn times_at(lat: f64, label: &str, date: NaiveDate, original_coordinates: Coordinates) {
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
         .done();
 
-    let ref_coords = Coordinates::new(lat, original_coords.longitude);
-    match PrayerTimes::try_new(date, ref_coords, params) {
+    let reference_coordinates = Coordinates::new(lat, original_coordinates.longitude);
+    match PrayerTimes::try_new(date, reference_coordinates, params) {
         Ok(t) => println!(
             "{label:>12} ({lat:.2}°): {:?} {:?} {:?} {:?} {:?} {:?}",
             t.time(Prayer::Fajr),

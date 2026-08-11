@@ -7,12 +7,12 @@ use mawaqit::prelude::*;
 #[test]
 fn oslo_lre_unchanged() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(59.9094, 10.7349);
+    let coordinates = Coordinates::new(59.9094, 10.7349);
     let lre_params = Configuration::new(18.0, 17.0)
         .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation)
         .done();
 
-    let times = PrayerTimes::try_new(date, coords, lre_params).unwrap();
+    let times = PrayerTimes::try_new(date, coordinates, lre_params).unwrap();
 
     assert!(
         times.time(Prayer::Fajr) < times.time(Prayer::Sunrise),
@@ -40,7 +40,7 @@ fn oslo_lre_unchanged() {
 /// consecutive days during the LRE transition (Brussels, June).
 #[test]
 fn lre_ramp_smooth_transition() {
-    let coords = Coordinates::new(50.85, 4.35);
+    let coordinates = Coordinates::new(50.85, 4.35);
     let lre_params = Configuration::new(18.0, 17.0)
         .high_latitude_rule(HighLatitudeRule::LocalRelativeEstimation)
         .done();
@@ -62,7 +62,7 @@ fn lre_ramp_smooth_transition() {
 
     for day_offset in 0..14 {
         let date = start + Duration::days(day_offset);
-        let times = PrayerTimes::try_new(date, coords, lre_params).unwrap();
+        let times = PrayerTimes::try_new(date, coordinates, lre_params).unwrap();
 
         // Ordering check on every day
         assert!(

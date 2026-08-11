@@ -52,10 +52,10 @@ impl HighLatitudeRule {
     /// - |latitude| > 66.6° → [`MiddleOfTheNight`](HighLatitudeRule::MiddleOfTheNight) (Zone 3 — LRE not designed for polar)
     #[must_use]
     pub fn recommended(coordinates: Coordinates) -> Self {
-        let abs_lat = coordinates.latitude.abs();
-        if abs_lat > 66.6 {
+        let absolute_latitude = coordinates.latitude.abs();
+        if absolute_latitude > 66.6 {
             Self::MiddleOfTheNight
-        } else if abs_lat > 48.6 {
+        } else if absolute_latitude > 48.6 {
             Self::LocalRelativeEstimation
         } else {
             Self::MiddleOfTheNight

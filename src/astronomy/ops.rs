@@ -1,5 +1,3 @@
-use chrono::{DateTime, Duration, Utc};
-
 use crate::astronomy::unit::Normalize;
 use crate::astronomy::unit::{Angle, Coordinates};
 
@@ -381,13 +379,6 @@ pub fn is_leap_year(year: u32) -> bool {
     }
 
     true
-}
-
-/// Adjust a time by a given offset in minutes.
-///
-/// Returns `None` if the resulting time overflows.
-pub fn adjust_time(date: &DateTime<Utc>, minutes: i64) -> Option<DateTime<Utc>> {
-    date.checked_add_signed(Duration::seconds(minutes * 60))
 }
 
 #[cfg(test)]

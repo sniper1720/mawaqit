@@ -29,9 +29,9 @@ fn scan_asr_gaps() {
                 } else {
                     -(raw_lat as f64)
                 };
-                let coords = Coordinates::new(lat, 0.0);
+                let coordinates = Coordinates::new(lat, 0.0);
 
-                let result = PrayerTimes::try_new(date, coords, params);
+                let result = PrayerTimes::try_new(date, coordinates, params);
                 match result {
                     Ok(times) => {
                         let f = times.time(Prayer::Fajr).format("%H:%M");
@@ -44,7 +44,7 @@ fn scan_asr_gaps() {
                             (times.time(Prayer::Maghrib) - times.time(Prayer::Asr)).num_minutes();
                         let resolved = PolarEstimation::NearestLatitude.resolve_latitude(
                             date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
-                            coords,
+                            coordinates,
                             Madhab::Shafi,
                         );
                         println!(
@@ -64,7 +64,7 @@ fn scan_asr_gaps() {
                     Err(_) => {
                         let resolved = PolarEstimation::NearestLatitude.resolve_latitude(
                             date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
-                            coords,
+                            coordinates,
                             Madhab::Shafi,
                         );
                         println!(
@@ -93,11 +93,11 @@ fn scan_latitude_stability() {
 
     for (season, date) in dates {
         for &lat in &lats_north {
-            let coords = Coordinates::new(lat, 0.0);
+            let coordinates = Coordinates::new(lat, 0.0);
             let prayer_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
             let resolved = PolarEstimation::NearestLatitude.resolve_latitude(
                 prayer_date,
-                coords,
+                coordinates,
                 Madhab::Shafi,
             );
             let params = Configuration::new(18.0, 17.0)
@@ -105,7 +105,7 @@ fn scan_latitude_stability() {
                 .madhab(Madhab::Shafi)
                 .polar_estimation(PolarEstimation::NearestLatitude)
                 .done();
-            if let Ok(times) = PrayerTimes::try_new(date, coords, params) {
+            if let Ok(times) = PrayerTimes::try_new(date, coordinates, params) {
                 let f = times.time(Prayer::Fajr).format("%H:%M");
                 let s = times.time(Prayer::Sunrise).format("%H:%M");
                 let d = times.time(Prayer::Dhuhr).format("%H:%M");
@@ -123,11 +123,11 @@ fn scan_latitude_stability() {
             }
         }
         for &lat in &lats_south {
-            let coords = Coordinates::new(lat, 0.0);
+            let coordinates = Coordinates::new(lat, 0.0);
             let prayer_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
             let resolved = PolarEstimation::NearestLatitude.resolve_latitude(
                 prayer_date,
-                coords,
+                coordinates,
                 Madhab::Shafi,
             );
             let params = Configuration::new(18.0, 17.0)
@@ -135,7 +135,7 @@ fn scan_latitude_stability() {
                 .madhab(Madhab::Shafi)
                 .polar_estimation(PolarEstimation::NearestLatitude)
                 .done();
-            if let Ok(times) = PrayerTimes::try_new(date, coords, params) {
+            if let Ok(times) = PrayerTimes::try_new(date, coordinates, params) {
                 let f = times.time(Prayer::Fajr).format("%H:%M");
                 let s = times.time(Prayer::Sunrise).format("%H:%M");
                 let d = times.time(Prayer::Dhuhr).format("%H:%M");
@@ -160,7 +160,7 @@ fn scan_latitude_stability() {
 #[test]
 fn tromso_summer_solstice_nearest_latitude() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(70.0, 20.0);
+    let coordinates = Coordinates::new(70.0, 20.0);
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
@@ -168,7 +168,7 @@ fn tromso_summer_solstice_nearest_latitude() {
         .done();
 
     // Should succeed — uses NearestLatitude to find a working latitude
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
 
     assert!(
         result.is_ok(),
@@ -204,13 +204,13 @@ fn tromso_summer_solstice_nearest_latitude() {
 #[test]
 fn tromso_summer_solstice_no_fallback_returns_error() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(70.0, 20.0);
+    let coordinates = Coordinates::new(70.0, 20.0);
     let mut params: Parameters = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
     // Explicitly set None (already default, but to be clear)
     params.polar_estimation = None;
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
 
     assert_eq!(
         result.err(),
@@ -224,10 +224,10 @@ fn tromso_summer_solstice_no_fallback_returns_error() {
 #[test]
 fn tromso_equinox_no_fallback_needed() {
     let date = NaiveDate::from_ymd_opt(2026, 3, 20).expect("valid date");
-    let coords = Coordinates::new(70.0, 20.0);
+    let coordinates = Coordinates::new(70.0, 20.0);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
 
     assert!(
         result.is_ok(),
@@ -241,14 +241,14 @@ fn tromso_equinox_no_fallback_needed() {
 #[test]
 fn longyearbyen_reference_45() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(78.0, 15.0);
+    let coordinates = Coordinates::new(78.0, 15.0);
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
         .polar_estimation(PolarEstimation::Reference45)
         .done();
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
 
     assert!(
         result.is_ok(),
@@ -284,14 +284,14 @@ fn longyearbyen_reference_45() {
 #[test]
 fn southern_polar_reference_45() {
     let date = NaiveDate::from_ymd_opt(2026, 12, 21).expect("valid date");
-    let coords = Coordinates::new(-70.0, 0.0);
+    let coordinates = Coordinates::new(-70.0, 0.0);
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
         .polar_estimation(PolarEstimation::Reference45)
         .done();
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
 
     assert!(
         result.is_ok(),
@@ -327,10 +327,10 @@ fn southern_polar_reference_45() {
 #[test]
 fn singapore_no_fallback() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(1.4, 103.8);
+    let coordinates = Coordinates::new(1.4, 103.8);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
 
     assert!(
         result.is_ok(),
@@ -353,13 +353,13 @@ fn singapore_no_fallback() {
 #[test]
 fn builder_polar_estimation_nearest_latitude() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(70.0, 20.0);
+    let coordinates = Coordinates::new(70.0, 20.0);
 
     let params = Configuration::new(18.0, 17.0)
         .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
     assert!(result.is_ok(), "Builder with NearestLatitude should work");
 }
 
@@ -367,14 +367,14 @@ fn builder_polar_estimation_nearest_latitude() {
 #[test]
 fn tromso_winter_nearest_latitude() {
     let date = NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid date");
-    let coords = Coordinates::new(70.0, 20.0);
+    let coordinates = Coordinates::new(70.0, 20.0);
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
         .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
     assert!(
         result.is_ok(),
         "NearestLatitude should work at polar winter: {:?}",
@@ -409,10 +409,10 @@ fn tromso_winter_nearest_latitude() {
 #[test]
 fn tromso_winter_no_fallback_returns_error() {
     let date = NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid date");
-    let coords = Coordinates::new(70.0, 20.0);
+    let coordinates = Coordinates::new(70.0, 20.0);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
     assert_eq!(
         result.err(),
         Some("sunrise or sunset does not occur at this latitude on this date"),
@@ -425,10 +425,10 @@ fn tromso_winter_no_fallback_returns_error() {
 #[test]
 fn no_fallback_asr_unreachable_error_message() {
     let date = NaiveDate::from_ymd_opt(2026, 12, 21).expect("valid date");
-    let coords = Coordinates::new(67.0, 0.0);
+    let coordinates = Coordinates::new(67.0, 0.0);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
 
     assert_eq!(
         result.err(),
@@ -441,10 +441,10 @@ fn no_fallback_asr_unreachable_error_message() {
 #[test]
 fn no_fallback_below_asr_window_succeeds() {
     let date = NaiveDate::from_ymd_opt(2026, 12, 21).expect("valid date");
-    let coords = Coordinates::new(66.0, 0.0);
+    let coordinates = Coordinates::new(66.0, 0.0);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
     assert!(
         result.is_ok(),
         "66°N winter solstice should work without fallback: {:?}",
@@ -456,12 +456,12 @@ fn no_fallback_below_asr_window_succeeds() {
 #[test]
 fn debug_southern_times() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(-70.0, 0.0);
+    let coordinates = Coordinates::new(-70.0, 0.0);
     let prayer_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
 
     // Resolved latitude
     let resolved =
-        PolarEstimation::NearestLatitude.resolve_latitude(prayer_date, coords, Madhab::Shafi);
+        PolarEstimation::NearestLatitude.resolve_latitude(prayer_date, coordinates, Madhab::Shafi);
     println!("Original lat: -70.0, Resolved lat: {:?}", resolved);
 
     // Compute transit at original lat by running try_new and printing individual prayer times
@@ -471,7 +471,7 @@ fn debug_southern_times() {
         .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
-    let times = PrayerTimes::try_new(date, coords, params).expect("should work");
+    let times = PrayerTimes::try_new(date, coordinates, params).expect("should work");
     println!("Fajr:     {}", times.time(Prayer::Fajr).format("%H:%M:%S"));
     println!(
         "Sunrise:  {}",
@@ -491,14 +491,14 @@ fn debug_southern_times() {
 #[test]
 fn southern_polar_winter_nearest_latitude() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(-70.0, 0.0);
+    let coordinates = Coordinates::new(-70.0, 0.0);
     let params = Configuration::new(18.0, 17.0)
         .method(Method::MuslimWorldLeague)
         .madhab(Madhab::Shafi)
         .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
     assert!(
         result.is_ok(),
         "Southern polar winter with NearestLatitude: {:?}",
@@ -533,12 +533,12 @@ fn southern_polar_winter_nearest_latitude() {
 #[test]
 fn polar_circle_solstice_nearest_latitude() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords = Coordinates::new(67.0, 0.0);
+    let coordinates = Coordinates::new(67.0, 0.0);
     let params = Configuration::new(18.0, 17.0)
         .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
-    let result = PrayerTimes::try_new(date, coords, params);
+    let result = PrayerTimes::try_new(date, coordinates, params);
     assert!(
         result.is_ok(),
         "NearestLatitude should work at 67°N: {:?}",
@@ -551,8 +551,8 @@ fn polar_circle_solstice_nearest_latitude() {
 #[test]
 fn different_longitudes_different_dhuhr() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
-    let coords_east = Coordinates::new(70.0, 20.0);
-    let coords_west = Coordinates::new(70.0, -20.0);
+    let coordinates_east = Coordinates::new(70.0, 20.0);
+    let coordinates_west = Coordinates::new(70.0, -20.0);
 
     let params_east = Configuration::new(18.0, 17.0)
         .polar_estimation(PolarEstimation::NearestLatitude)
@@ -561,8 +561,8 @@ fn different_longitudes_different_dhuhr() {
         .polar_estimation(PolarEstimation::NearestLatitude)
         .done();
 
-    let east_times = PrayerTimes::try_new(date, coords_east, params_east).expect("east ok");
-    let west_times = PrayerTimes::try_new(date, coords_west, params_west).expect("west ok");
+    let east_times = PrayerTimes::try_new(date, coordinates_east, params_east).expect("east ok");
+    let west_times = PrayerTimes::try_new(date, coordinates_west, params_west).expect("west ok");
 
     // Dhuhr at different longitudes should differ (~4 min/degree)
     let dhuhr_diff = (east_times.time(Prayer::Dhuhr) - west_times.time(Prayer::Dhuhr))
