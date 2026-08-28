@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] — 2026-08-28
+
+### Breaking
+
+- Renamed `PrayerTimes::resolved_latitude()` to `reference_latitude()`.
+  The name now says what the value means: the latitude actually used for
+  solar calculations — the true latitude, or whichever substitute
+  resolved it (a polar estimation method, the ±60° summer anchor, or the
+  nearest-latitude walk).
+
+### Added
+
+- Moonsighting Committee now follows the committee's own rules above 60°
+  latitude instead of erroring:
+  - astronomical summer slides the schedule to the ±60° anchor with
+    Sab'u Lail, the season running from the true solstice instant to the
+    following equinox instant;
+  - outside summer, days whose sun neither rises nor sets follow the
+    FAQ's nearest-latitude rule (Aqrabul-Bilaad): walk along the
+    meridian to the nearest latitude with normal days and compute there,
+    wholesale;
+  - remaining days use the seasonal functions at the true latitude.
+- Coordinate validation: `try_new()` rejects non-finite or
+  out-of-range latitude/longitude with a clear error.
+
+### Changed
+
+- `high_latitude_rule` and `polar_estimation` no longer affect
+  Moonsighting Committee schedules — the method carries its own
+  high-latitude rules. Previously LocalRelativeEstimation silently
+  replaced the committee's Fajr/Isha below 66.6° and errored above it.
+  Both settings behave as documented for every other method.
+- The summer boundary is now exact astronomy (bisection on the sun's
+  declination curve) rather than the earlier 18-hour day-length
+  threshold, which fired weeks before summer and missed late summer.
+
+### Fixed
+
+- Southern-hemisphere `days_since_solstice`: the committee counts southern
+  seasons from the June solstice (southern winter) as its method's
+  convention. Dates before that anchor previously underflowed and the
+  count overflowed across the year boundary; the day-of-year now wraps
+  correctly.
+
 ## [0.3.0] — 2026-08-11
 
 ### Breaking

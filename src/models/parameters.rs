@@ -7,7 +7,7 @@ use super::prayer::Prayer;
 use super::rounding::Rounding;
 use super::shafaq::Shafaq;
 
-/// Night-portion fractions applied by high-latitude fallbacks,
+/// Night-portion fractions applied by high-latitude estimation rules,
 /// `fajr` and `isha` as fractions of the night.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct NightPortions {
@@ -16,7 +16,7 @@ pub(crate) struct NightPortions {
 }
 
 /// Settings that determine prayer time calculation:
-/// angles, method, madhab, high-latitude rule, rounding, polar fallback, and adjustments.
+/// angles, method, madhab, high-latitude rule, rounding, polar estimation, and adjustments.
 ///
 /// Use [`Configuration`] to build a `Parameters` value ergonomically.
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -27,7 +27,15 @@ pub struct Parameters {
     pub isha_angle: f64,
     pub isha_interval: i32,
     pub madhab: Madhab,
+    /// Estimation rule for Fajr/Isha when the sun does not reach the
+    /// method's angle. Ignored by [`Method::MoonsightingCommittee`],
+    /// which carries its own high-latitude rules.
     pub high_latitude_rule: HighLatitudeRule,
+    /// Estimation strategy for latitudes where the sun may not rise or
+    /// set. `None` uses the true latitude and surfaces missing events as
+    /// errors from [`crate::schedule::PrayerTimes::try_new`]. Ignored by
+    /// [`Method::MoonsightingCommittee`], which resolves high-latitude
+    /// days through its own Zone C rules.
     pub polar_estimation: Option<PolarEstimation>,
     pub adjustments: TimeAdjustment,
     pub method_adjustments: TimeAdjustment,

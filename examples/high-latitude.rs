@@ -27,7 +27,7 @@ fn main() {
     let dt: DateTime<Utc> = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
     let tromso = Coordinates::new(70.0, 20.0);
 
-    // 1. Original 70°N — no fallback
+    // 1. Original 70°N — no estimation
     times_at(70.0, "Original 70°", date, tromso);
 
     // 2. NearestLatitude (resolved)

@@ -16,8 +16,9 @@ pub enum HighLatitudeRule {
     /// Fajr will never be earlier than the beginning of the last seventh of
     /// the night and Isha will never be later than the end of the first seventh of the night.
     ///
-    /// This is recommended for locations above 48° latitude to prevent prayer
-    /// times that would be difficult to perform.
+    /// Useful at high latitudes where the standard angles cannot be
+    /// reached; the MWL's Zone-2 recommendation since 2009 is
+    /// [`LocalRelativeEstimation`](HighLatitudeRule::LocalRelativeEstimation).
     SeventhOfTheNight,
 
     /// The fajr/isha angle α determines a fraction t = α ÷ 60 of the night.
@@ -33,13 +34,13 @@ pub enum HighLatitudeRule {
     /// methodology (between 48.6° and 66.6° latitude) using their
     /// standard angles (18° Fajr / 17° Isha).  The percentage is
     /// resolved automatically inside [`crate::schedule::PrayerTimes::try_new`] by
-    /// scanning a full year at the working latitude.
+    /// scanning a full year at the reference latitude.
     LocalRelativeEstimation,
 
     /// Deferred variant resolved inside [`crate::schedule::PrayerTimes::try_new`].
     ///
     /// Evaluated via [`recommended()`](HighLatitudeRule::recommended) against
-    /// the working latitude (original or fallback-resolved).
+    /// the reference latitude (original or estimation-resolved).
     Recommended,
 }
 

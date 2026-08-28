@@ -5,12 +5,13 @@
 
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
 
-use crate::astronomy::solar::SolarTime;
+use crate::astronomy::solar::{self, STANDARD_RISE_SET_ALTITUDE_DEGREES, SolarTime};
 use crate::astronomy::unit::{Angle, Coordinates, Stride};
 use crate::methods::moonsighting;
 use crate::models::high_altitude_rule::HighLatitudeRule;
 use crate::models::method::Method;
 use crate::models::parameters::Parameters;
+use crate::models::polar;
 
 use crate::models::prayer::Prayer;
 use crate::models::rounding::Rounding;
@@ -31,6 +32,108 @@ impl PrayerSide {
     fn is_after_transit(self) -> bool {
         matches!(self, PrayerSide::Isha)
     }
+}
+
+/// How the Moonsighting Committee method resolves prayer times at high
+/// latitudes, decided from latitude and the date.
+enum MoonsightingCommitteeZone {
+    /// Standard flow (Zone A: 0°–55°, Zone B: 55°–60°).
+    Standard,
+    /// Astronomical summer above 60°: anchor to ±60° and apply Sab'u
+    /// Lail — the committee text's season-scoped "slide down to 60°"
+    /// clause. Covers every summer day, including the post-solstice
+    /// perpetual tail that still lies inside the season.
+    Anchored(f64),
+    /// Non-summer with a real day at the true latitude: seasonal
+    /// functions directly at that latitude (the winter clause). Days on
+    /// which the three-day window is not normal there fall back to
+    /// [`MoonsightingCommitteeZone::Substituted`].
+    Dynamic,
+    /// Perpetual day/night OUTSIDE summer: the generic perpetual clause
+    /// plus the FAQ's nearest-latitude rule (Aqrabul-Bilaad) —
+    /// approximate from the nearest latitude (same meridian) whose
+    /// day-window is normal. The caller resolves that substitute
+    /// latitude.
+    Substituted,
+}
+
+/// Determine the Moonsighting Committee zone from the true latitude and date.
+///
+/// Routing follows the sources' hierarchy (specific clause over generic):
+///
+/// - **Astronomical summer** above 60° → slide to ±60° + Sab'u Lail
+///   ([`solar::is_astronomical_summer`] locates the season exactly).
+/// - **Perpetual day/night outside summer** → nearest-latitude
+///   substitution ([`MoonsightingCommitteeZone::Substituted`]; the
+///   caller walks).
+/// - **Real days outside summer** → seasonal functions at the true
+///   latitude ([`MoonsightingCommitteeZone::Dynamic`]).
+///
+/// Perpetual day/night detection mirrors [`SolarTime::new`]'s
+/// refraction-adjusted horizon ([`STANDARD_RISE_SET_ALTITUDE_DEGREES`]):
+/// rise/set exist iff `(sin h − sin φ sin δ) / (cos φ cos δ)` lies in
+/// `[−1, 1]`.
+fn resolve_moonsighting_committee_zone(
+    latitude: f64,
+    date: DateTime<Utc>,
+) -> MoonsightingCommitteeZone {
+    if latitude.abs() <= 60.0 {
+        return MoonsightingCommitteeZone::Standard;
+    }
+
+    if solar::is_astronomical_summer(date, latitude) {
+        return MoonsightingCommitteeZone::Anchored(60.0 * latitude.signum());
+    }
+
+    let declination_radians = solar::declination_on(date.julian_day()).to_radians();
+    let latitude_radians = latitude.to_radians();
+    let horizon_sine = STANDARD_RISE_SET_ALTITUDE_DEGREES.to_radians().sin();
+    let rise_set_cosine_bound = (horizon_sine - latitude_radians.sin() * declination_radians.sin())
+        / (latitude_radians.cos() * declination_radians.cos());
+
+    if rise_set_cosine_bound >= 1.0 || rise_set_cosine_bound <= -1.0 {
+        // Perpetual night / perpetual day outside astronomical summer.
+        MoonsightingCommitteeZone::Substituted
+    } else {
+        // Winter/Spring/Fall with real days: sunrise/sunset exist
+        // ⇔ −1 < bound < 1, so the seasonal formula is computable.
+        MoonsightingCommitteeZone::Dynamic
+    }
+}
+
+/// The three [`SolarTime`] instances backing a day's schedule: the day
+/// itself plus the adjacent days used for night-length computation.
+#[derive(Debug, Copy, Clone)]
+struct SolarTimeSet {
+    current: SolarTime,
+    tomorrow: SolarTime,
+    yesterday: SolarTime,
+}
+
+/// How Moonsighting Committee computes Fajr and Isha at the reference latitude.
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum MoonsightingComputation {
+    /// Sab'u Lail (1/7th of the night) — Zone B (55°–60°) and the Zone C
+    /// Summer anchor at 60°.
+    SabuLail,
+    /// The seasonal functions computed directly at the reference latitude —
+    /// Zone C Winter/Spring/Fall at the true latitude, and the
+    /// nearest-latitude substitute for perpetual days outside summer.
+    Seasonal,
+}
+
+/// True when Moonsighting Committee Fajr/Isha uses Sab'u Lail (1/7th of the
+/// night) at the reference latitude instead of the seasonal functions: Zone B
+/// (|latitude| 55°–60°) and the Zone C Summer anchor at ±60°. Zone C
+/// Winter/Spring/Fall (dynamic) keeps the seasonal functions.
+fn moonsighting_applies_sabu_lail(
+    parameters: Parameters,
+    computation: MoonsightingComputation,
+    coordinates: Coordinates,
+) -> bool {
+    parameters.method == Method::MoonsightingCommittee
+        && matches!(computation, MoonsightingComputation::SabuLail)
+        && coordinates.latitude.abs() >= 55.0
 }
 
 /// Times of all prayers for a given date, location, and configuration.
@@ -56,11 +159,26 @@ impl PrayerTimes {
     /// Try to compute all prayer times. With no [`crate::models::polar::PolarEstimation`]
     /// configured, returns an informative error at polar latitudes
     /// where sunrise or sunset (or the Asr shadow angle) does not occur.
+    /// # Errors
+    ///
+    /// Returns `Err` when the solar model cannot produce a schedule at
+    /// the given coordinates and date: sunrise or sunset does not occur
+    /// (polar day/night), the Asr shadow angle is not reachable, the
+    /// coordinates are invalid (non-finite or |latitude| > 90°), or the
+    /// date itself is invalid. Moonsighting Committee resolves all dates
+    /// above 60° through its own rules and does not fail for
+    /// high-latitude reasons.
     pub fn try_new(
         date: NaiveDate,
         coordinates: Coordinates,
         mut parameters: Parameters,
     ) -> Result<PrayerTimes, &'static str> {
+        if !coordinates.latitude.is_finite()
+            || !(-90.0..=90.0).contains(&coordinates.latitude)
+            || !coordinates.longitude.is_finite()
+        {
+            return Err("Invalid coordinates provided");
+        }
         let prayer_date = date
             .and_hms_opt(0, 0, 0)
             .ok_or("Invalid date provided")?
@@ -68,23 +186,105 @@ impl PrayerTimes {
         let tomorrow = prayer_date.tomorrow();
         let yesterday = prayer_date - Duration::days(1);
 
-        // Resolve the latitude used for solar calculations. A missing
-        // fallback strategy uses the true latitude — polar day/night and
-        // the unreachable-Asr window then surface as errors below.
-        let resolved_latitude = match parameters.polar_estimation {
-            Some(fallback) => {
-                fallback.resolve_latitude(prayer_date, coordinates, parameters.madhab)
+        // Moonsighting Committee owns its high-latitude behavior: the
+        // ±60° summer anchor, the nearest-latitude walk (Aqrabul-Bilaad),
+        // and the seasonal functions are the method's own rules —
+        // `polar_estimation` and `high_latitude_rule` never touch its
+        // output. Other methods keep the standard flow and honor
+        // `polar_estimation`.
+        let (
+            reference_coordinates,
+            moonsighting_committee_solar_override,
+            moonsighting_computation,
+        ) = if parameters.method == Method::MoonsightingCommittee {
+            let nearest_latitude_reference = || {
+                let asr_shadow = parameters.madhab.shadow() as f64;
+                Coordinates::new(
+                    polar::nearest_working_latitude(prayer_date, &coordinates, asr_shadow),
+                    coordinates.longitude,
+                )
+            };
+            match resolve_moonsighting_committee_zone(coordinates.latitude, prayer_date) {
+                MoonsightingCommitteeZone::Anchored(anchor_latitude) => {
+                    let anchor_coordinates =
+                        Coordinates::new(anchor_latitude, coordinates.longitude);
+                    (
+                        anchor_coordinates,
+                        Some(SolarTimeSet {
+                            current: SolarTime::new(prayer_date, anchor_coordinates)?,
+                            tomorrow: SolarTime::new(tomorrow, anchor_coordinates)?,
+                            yesterday: SolarTime::new(yesterday, anchor_coordinates)?,
+                        }),
+                        MoonsightingComputation::SabuLail,
+                    )
+                }
+                MoonsightingCommitteeZone::Substituted => {
+                    // Perpetual day/night outside summer: nearest latitude
+                    // on the same meridian whose day-window is normal; the
+                    // whole schedule then computes there exactly as it
+                    // would for a resident of that latitude.
+                    (
+                        nearest_latitude_reference(),
+                        None,
+                        MoonsightingComputation::Seasonal,
+                    )
+                }
+                MoonsightingCommitteeZone::Dynamic => {
+                    let asr_shadow = parameters.madhab.shadow() as f64;
+                    if polar::three_day_window_is_normal(prayer_date, &coordinates, asr_shadow) {
+                        // Real days all around: seasonal functions at the
+                        // true latitude (the winter clause).
+                        (coordinates, None, MoonsightingComputation::Seasonal)
+                    } else {
+                        // Transition day: today has a real day at the true
+                        // latitude but an adjacent one does not — or today's
+                        // sun never climbs to the Asr shadow angle. The
+                        // three-day solar set cannot build at the true
+                        // latitude, so the nearest-latitude walk governs
+                        // here too.
+                        (
+                            nearest_latitude_reference(),
+                            None,
+                            MoonsightingComputation::Seasonal,
+                        )
+                    }
+                }
+                MoonsightingCommitteeZone::Standard => {
+                    (coordinates, None, MoonsightingComputation::SabuLail)
+                }
             }
-            None => coordinates.latitude,
+        } else {
+            // Resolve the latitude used for solar calculations. A missing
+            // estimation method uses the true latitude — polar day/night
+            // and the unreachable-Asr window then surface as errors below.
+            let resolved_latitude = match parameters.polar_estimation {
+                Some(estimation) => {
+                    estimation.resolve_latitude(prayer_date, coordinates, parameters.madhab)
+                }
+                None => coordinates.latitude,
+            };
+            (
+                Coordinates::new(resolved_latitude, coordinates.longitude),
+                None,
+                MoonsightingComputation::SabuLail,
+            )
         };
-        let reference_coordinates = Coordinates::new(resolved_latitude, coordinates.longitude);
 
-        // Full SolarTime at reference latitude for all prayers.
-        let solar_at_reference = SolarTime::new(prayer_date, reference_coordinates)?;
-        let solar_at_reference_tomorrow = SolarTime::new(tomorrow, reference_coordinates)?;
-        let solar_at_reference_yesterday = SolarTime::new(yesterday, reference_coordinates)?;
+        let solar_set = if let Some(override_set) = moonsighting_committee_solar_override {
+            override_set
+        } else {
+            SolarTimeSet {
+                current: SolarTime::new(prayer_date, reference_coordinates)?,
+                tomorrow: SolarTime::new(tomorrow, reference_coordinates)?,
+                yesterday: SolarTime::new(yesterday, reference_coordinates)?,
+            }
+        };
+        let SolarTimeSet {
+            current: solar_at_reference,
+            tomorrow: solar_at_reference_tomorrow,
+            yesterday: solar_at_reference_yesterday,
+        } = solar_set;
 
-        // Night length from reference latitude
         let night = solar_at_reference_tomorrow
             .sunrise
             .unwrap()
@@ -94,30 +294,31 @@ impl PrayerTimes {
             .unwrap()
             .signed_duration_since(solar_at_reference_yesterday.sunset.unwrap());
 
-        // Resolve deferred Recommended variant against the working latitude.
+        // Resolve deferred Recommended variant against the reference latitude.
         if parameters.high_latitude_rule == HighLatitudeRule::Recommended {
             parameters.high_latitude_rule = HighLatitudeRule::recommended(reference_coordinates);
         }
 
-        // MWL 2009: LRE is defined only for Zone 2 (|latitude| ≤ 66.6°).
-        if parameters.high_latitude_rule == HighLatitudeRule::LocalRelativeEstimation
-            && reference_coordinates.latitude.abs() > 66.6
-        {
+        // LRE is MWL 2009's Zone-2 rule (|latitude| ≤ 66.6°) with its
+        // own Fajr/Isha path; Moonsighting Committee never consults it —
+        // its independence from high-latitude settings is declared above.
+        let lre_applicable = parameters.high_latitude_rule
+            == HighLatitudeRule::LocalRelativeEstimation
+            && parameters.method != Method::MoonsightingCommittee;
+
+        if lre_applicable && reference_coordinates.latitude.abs() > 66.6 {
             return Err("LocalRelativeEstimation not applicable above 66.6° latitude");
         }
 
-        // LRE has its own MWL 2009 path; others use calculate_fajr/calculate_isha.
-        // Compute the ratio on the fly from a year-long scan.
-        let lre_ratio =
-            if parameters.high_latitude_rule == HighLatitudeRule::LocalRelativeEstimation {
-                Some(HighLatitudeRule::compute_isha_night_ratio(
-                    reference_coordinates,
-                    &parameters,
-                    prayer_date.year(),
-                ))
-            } else {
-                None
-            };
+        let lre_ratio = if lre_applicable {
+            Some(HighLatitudeRule::compute_isha_night_ratio(
+                reference_coordinates,
+                &parameters,
+                prayer_date.year(),
+            ))
+        } else {
+            None
+        };
 
         let final_fajr = if let Some(isha_night_ratio) = lre_ratio {
             PrayerTimes::compute_lre(
@@ -136,6 +337,7 @@ impl PrayerTimes {
                 night_yesterday,
                 reference_coordinates,
                 prayer_date,
+                moonsighting_computation,
             )
             .rounded_minute(parameters.rounding)
         };
@@ -146,7 +348,6 @@ impl PrayerTimes {
             .adjust_time(parameters.time_adjustments(Prayer::Sunrise))
             .rounded_minute(parameters.rounding);
 
-        // ── Dhuhr (NearestLatitude shifts transit to the resolved latitude too) ──
         let final_dhuhr = solar_at_reference
             .transit
             .adjust_time(parameters.time_adjustments(Prayer::Dhuhr))
@@ -178,11 +379,12 @@ impl PrayerTimes {
                 night,
                 reference_coordinates,
                 prayer_date,
+                moonsighting_computation,
             )
             .rounded_minute(parameters.rounding)
         };
 
-        // ── Yesterday's Isha (covers midnight-to-Fajr gap) ──
+        // Yesterday's Isha covers the midnight-to-Fajr gap.
         let isha_yesterday = if let Some(isha_night_ratio) = lre_ratio {
             PrayerTimes::compute_lre(
                 isha_night_ratio,
@@ -200,11 +402,12 @@ impl PrayerTimes {
                 night_yesterday,
                 reference_coordinates,
                 yesterday,
+                moonsighting_computation,
             )
             .rounded_minute(parameters.rounding)
         };
 
-        // ── Tomorrow's Fajr (for qiyam) ──
+        // Tomorrow's Fajr feeds the qiyam calculation.
         let tomorrow_fajr = if let Some(isha_night_ratio) = lre_ratio {
             PrayerTimes::compute_lre(
                 isha_night_ratio,
@@ -222,6 +425,7 @@ impl PrayerTimes {
                 night,
                 reference_coordinates,
                 tomorrow,
+                moonsighting_computation,
             )
             .rounded_minute(parameters.rounding)
         };
@@ -241,17 +445,20 @@ impl PrayerTimes {
             qiyam: final_qiyam,
             fajr_tomorrow: final_fajr_tomorrow,
             coordinates,
-            reference_latitude: resolved_latitude,
+            reference_latitude: reference_coordinates.latitude,
             date: prayer_date,
             parameters,
         })
     }
 
-    /// Return the latitude actually used for solar calculations after any
-    /// [`crate::models::polar::PolarEstimation`] resolution. Equals `coordinates.latitude` when
-    /// no fallback strategy is configured.
+    /// Return the latitude actually used for solar calculations: the
+    /// true latitude, the ±60° summer anchor, or the nearest-latitude
+    /// substitute (Moonsighting Committee), or the latitude
+    /// resolved by a [`crate::models::polar::PolarEstimation`] method
+    /// (other methods). Equals `coordinates.latitude` whenever no
+    /// substitution applies.
     #[must_use]
-    pub fn resolved_latitude(&self) -> f64 {
+    pub fn reference_latitude(&self) -> f64 {
         self.reference_latitude
     }
 
@@ -359,6 +566,7 @@ impl PrayerTimes {
         night: Duration,
         coordinates: Coordinates,
         prayer_date: DateTime<Utc>,
+        moonsighting_computation: MoonsightingComputation,
     ) -> DateTime<Utc> {
         let sunrise = solar_time
             .sunrise
@@ -384,8 +592,7 @@ impl PrayerTimes {
             .time_for_solar_angle(Angle::new(-parameters.fajr_angle), false)
             .unwrap_or(safe_fajr);
 
-        // special case for moonsighting committee above latitude 55
-        if parameters.method == Method::MoonsightingCommittee && coordinates.latitude >= 55.0 {
+        if moonsighting_applies_sabu_lail(parameters, moonsighting_computation, coordinates) {
             let night_fraction = night.num_seconds() / 7;
             fajr = sunrise
                 .checked_add_signed(Duration::seconds(-night_fraction))
@@ -405,6 +612,7 @@ impl PrayerTimes {
         night: Duration,
         coordinates: Coordinates,
         prayer_date: DateTime<Utc>,
+        moonsighting_computation: MoonsightingComputation,
     ) -> DateTime<Utc> {
         let sunset = solar_time
             .sunset
@@ -439,8 +647,7 @@ impl PrayerTimes {
                 .time_for_solar_angle(Angle::new(-parameters.isha_angle), true)
                 .unwrap_or(safe_isha);
 
-            // special case for moonsighting committee above latitude 55
-            if parameters.method == Method::MoonsightingCommittee && coordinates.latitude >= 55.0 {
+            if moonsighting_applies_sabu_lail(parameters, moonsighting_computation, coordinates) {
                 let night_fraction = night.num_seconds() / 7;
                 isha = sunset
                     .checked_add_signed(Duration::seconds(night_fraction))
@@ -697,6 +904,36 @@ mod tests {
     use crate::models::high_altitude_rule::HighLatitudeRule;
     use crate::models::madhab::Madhab;
     use chrono::{NaiveDate, TimeZone, Utc};
+
+    #[test]
+    fn non_finite_or_out_of_range_coordinates_are_rejected() {
+        let date = NaiveDate::from_ymd_opt(2026, 7, 15).expect("valid date");
+        let params = Configuration::with(Method::MoonsightingCommittee, Madhab::Shafi);
+
+        for coordinates in [
+            Coordinates::new(f64::NAN, 23.68),
+            Coordinates::new(f64::INFINITY, 23.68),
+            Coordinates::new(70.66, f64::NEG_INFINITY),
+            Coordinates::new(90.5, 23.68),
+            Coordinates::new(-91.0, 23.68),
+        ] {
+            assert_eq!(
+                PrayerTimes::try_new(date, coordinates, params),
+                Err("Invalid coordinates provided"),
+                "{coordinates:?} must be rejected"
+            );
+        }
+
+        // Ordinary locations still pass validation.
+        assert!(
+            PrayerTimes::try_new(
+                date,
+                Coordinates::new(24.71, 46.68),
+                Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi)
+            )
+            .is_ok()
+        );
+    }
 
     #[test]
     fn current_prayer_should_be_fajr() {

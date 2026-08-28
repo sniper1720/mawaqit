@@ -3,6 +3,13 @@ use chrono::{DateTime, Datelike, TimeZone, Utc};
 use crate::astronomy::ops;
 use crate::astronomy::unit::{Angle, Coordinates, Stride};
 
+/// Altitude of the Sun's center at the conventional moments of sunrise
+/// and sunset: −50′ below the geometric horizon, composed of 34′
+/// atmospheric refraction and 16′ solar semidiameter. Every rise/set
+/// computation in the crate must use this same horizon so that event
+/// existence agrees everywhere.
+pub(crate) const STANDARD_RISE_SET_ALTITUDE_DEGREES: f64 = -50.0 / 60.0;
+
 /// Geocentric solar coordinates (declination, right ascension, apparent
 /// sidereal time) for a given Julian day.
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -74,6 +81,95 @@ impl SolarCoordinates {
     }
 }
 
+/// Sun's declination (degrees) at the given Julian day.
+///
+/// Returns the geocentric declination — the angle between the Sun's
+/// rays and the plane of the Earth's equator. Used by the Moonsighting
+/// Committee zone resolver to detect astronomical summer and perpetual
+/// day/night.
+pub(crate) fn declination_on(julian_day: f64) -> f64 {
+    SolarCoordinates::new(julian_day).declination.degrees
+}
+
+/// True when `date` lies inside astronomical summer at `latitude`.
+///
+/// Astronomical summer runs from the solstice instant to the following
+/// equinox instant.  A calendar date belongs to it when the solstice
+/// falls on that date or earlier and the equinox on a strictly later
+/// date — the almanac convention by which "summer begins" on the date
+/// containing the solstice.  The southern hemisphere is handled
+/// implicitly: the window between any solstice and its following
+/// equinox carries one fixed declination sign, and matching that sign
+/// against `latitude` selects exactly one of the two annual windows.
+///
+/// Both instants are located by bisection on the declination curve, so
+/// no season boundaries or tolerances are hardcoded; precision is bound
+/// only by the [`SolarCoordinates`] model itself.  `date` is the UTC
+/// midnight marker of the civil date, as used everywhere else in the
+/// crate.
+pub(crate) fn is_astronomical_summer(date: DateTime<Utc>, latitude: f64) -> bool {
+    let reference_julian_day = date.julian_day();
+    let declination =
+        |day_offset: f64| -> f64 { declination_on(reference_julian_day + day_offset) };
+
+    // Each same-sign region between two consecutive equinoxes spans
+    // months, so a daily step can never jump over a boundary unnoticed.
+    // The declination is periodic for any finite Julian day, so both
+    // walks terminate without an artificial bound: a bound here could
+    // only mask a broken invariant as a wrong answer.
+    let sun_rises_above_equator = |declination_degrees: f64| declination_degrees >= 0.0;
+    let reference_side = sun_rises_above_equator(declination(0.0));
+
+    let mut previous_crossing_high = 0.0;
+    let mut previous_crossing_low = -1.0;
+    while sun_rises_above_equator(declination(previous_crossing_low)) == reference_side {
+        previous_crossing_high = previous_crossing_low;
+        previous_crossing_low -= 1.0;
+    }
+
+    let mut next_crossing_low = 0.0;
+    let mut next_crossing_high = 1.0;
+    while sun_rises_above_equator(declination(next_crossing_high)) == reference_side {
+        next_crossing_low = next_crossing_high;
+        next_crossing_high += 1.0;
+    }
+
+    // Between those crossings the declination is unimodal: bisect on the
+    // slope to locate the enclosed solstice.
+    let mut solstice_lower_bound = previous_crossing_high;
+    let mut solstice_upper_bound = next_crossing_low;
+    for _ in 0..40 {
+        let middle = (solstice_lower_bound + solstice_upper_bound) / 2.0;
+        if declination(middle + 0.01) - declination(middle - 0.01) > 0.0 {
+            // Still rising: the solstice lies to the right.
+            solstice_lower_bound = middle;
+        } else {
+            solstice_upper_bound = middle;
+        }
+    }
+    let solstice_offset = (solstice_lower_bound + solstice_upper_bound) / 2.0;
+
+    // Bisect the forward bracket on the sign itself to locate the equinox.
+    let mut equinox_lower_bound = next_crossing_low;
+    let mut equinox_upper_bound = next_crossing_high;
+    for _ in 0..40 {
+        let middle = (equinox_lower_bound + equinox_upper_bound) / 2.0;
+        if sun_rises_above_equator(declination(middle)) == reference_side {
+            equinox_lower_bound = middle;
+        } else {
+            equinox_upper_bound = middle;
+        }
+    }
+    let equinox_offset = (equinox_lower_bound + equinox_upper_bound) / 2.0;
+
+    // Offsets are measured in days from the date marker, so "the solstice
+    // falls on this date or earlier" is `< 1.0` and "the equinox falls on
+    // a later date" is `>= 1.0`.
+    declination(solstice_offset).signum() == latitude.signum()
+        && solstice_offset < 1.0
+        && equinox_offset >= 1.0
+}
+
 /// Solar time data and calculations for a given date and location.
 #[derive(Debug, Copy, Clone)]
 pub struct SolarTime {
@@ -91,9 +187,11 @@ pub struct SolarTime {
 impl SolarTime {
     /// Compute solar time data for the given date and coordinates.
     ///
-    /// Returns `Err` when the sun never rises or sets (polar day/night),
-    /// or when solar transit is at or below the geometric horizon
-    /// (no real daylight).
+    /// Returns `Err` when sunrise or sunset never occurs on this date
+    /// (polar day or polar night), i.e. when culmination never crosses
+    /// the refraction-adjusted horizon of −0.833° (50′ below the
+    /// geometric horizon: 34′ atmospheric refraction + 16′ solar
+    /// semidiameter).
     pub fn new(date: DateTime<Utc>, coordinates: Coordinates) -> Result<SolarTime, &'static str> {
         // All calculation need to occur at 0h0m UTC
         let today = Utc
@@ -105,7 +203,7 @@ impl SolarTime {
         let prev_solar = SolarCoordinates::new(yesterday.julian_day());
         let solar = SolarCoordinates::new(today.julian_day());
         let next_solar = SolarCoordinates::new(tomorrow.julian_day());
-        let horizon_depression_angle = Angle::new(-50.0 / 60.0);
+        let horizon_depression_angle = Angle::new(STANDARD_RISE_SET_ALTITUDE_DEGREES);
         let approx_transit = ops::approximate_transit(
             coordinates.longitude_angle(),
             solar.apparent_sidereal_time,
@@ -219,13 +317,17 @@ impl SolarTime {
     #[must_use]
     pub fn time_for_shadow(&self, shadow_length: f64) -> Option<DateTime<Utc>> {
         let absolute_degrees = (self.observer.latitude - self.declination().degrees).abs();
+
+        // The noon-shadow rule presumes culmination above the horizon;
+        // at |latitude − declination| ≥ 90° the tangent flips sign and
+        // the formula leaves its derivation domain.
+        if absolute_degrees >= 90.0 {
+            return None;
+        }
+
         let shadow_tangent = Angle::new(absolute_degrees);
         let inverse_tangent = shadow_length + shadow_tangent.radians().tan();
         let angle = Angle::from_radians((1.0 / inverse_tangent).atan());
-
-        if angle.degrees < 0.0 {
-            return None;
-        }
 
         self.time_for_solar_angle(angle, true)
     }
@@ -386,7 +488,7 @@ mod tests {
         let prev_solar = SolarCoordinates::new(yesterday.julian_day());
         let solar = SolarCoordinates::new(today.julian_day());
         let next_solar = SolarCoordinates::new(tomorrow.julian_day());
-        let horizon_depression_angle = Angle::new(-50.0 / 60.0);
+        let horizon_depression_angle = Angle::new(STANDARD_RISE_SET_ALTITUDE_DEGREES);
         let approx_transit = ops::approximate_transit(
             coordinates.longitude_angle(),
             solar.apparent_sidereal_time,
@@ -411,5 +513,20 @@ mod tests {
         );
 
         assert!((sunrise_time - 10.131_800_480_632_85).abs() < 1e-12);
+    }
+
+    #[test]
+    fn acceptance_follows_refraction_horizon_not_geometry() {
+        // 2026-12-21 near Hammerfest's longitude: at 67.1°N noon sits
+        // below the geometric horizon yet still clears −0.833°, so the
+        // witnessed day must be accepted; past |φ−δ| = 90.833° it must
+        // not. Guards against reintroducing a geometric acceptance gate.
+        let date = Utc.with_ymd_and_hms(2026, 12, 21, 0, 0, 0).unwrap();
+        let band_day =
+            SolarTime::new(date, Coordinates::new(67.1, 23.68)).expect("refraction-band day");
+        let day_length_seconds =
+            (band_day.sunset.unwrap() - band_day.sunrise.unwrap()).num_seconds();
+        assert!(day_length_seconds > 0 && day_length_seconds < 3 * 3600);
+        assert!(SolarTime::new(date, Coordinates::new(67.5, 23.68)).is_err());
     }
 }

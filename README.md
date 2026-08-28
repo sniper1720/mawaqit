@@ -12,7 +12,7 @@ Add `mawaqit` under `[dependencies]` in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mawaqit = "0.3"
+mawaqit = "0.4"
 ```
 
 Then set your location, date, and calculation method to get prayer times:
@@ -75,7 +75,7 @@ let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
 | `isha_angle`        | `f64`              | Sun angle below horizon for Isha (degrees).                              |
 | `isha_interval`     | `i32`              | Minutes after Maghrib to set Isha (overrides angle when > 0).            |
 | `madhab`            | `Madhab`           | Asr calculation (Shafi or Hanafi).                                       |
-| `high_latitude_rule`| `HighLatitudeRule` | Fallback rule for high latitudes. Default: `MiddleOfTheNight`.           |
+| `high_latitude_rule` | `HighLatitudeRule` | Estimation rule for high latitudes. Default: `MiddleOfTheNight`.        |
 | `polar_estimation`  | `Option<PolarEstimation>` | Estimation method for polar (>66.6°). Default: `None` (true latitude).     |
 | `adjustments`       | `TimeAdjustment`   | Custom per-prayer offsets in minutes (user adjustments).                 |
 | `method_adjustments`| `TimeAdjustment`   | Built-in per-prayer offsets from the method preset.                      |
@@ -95,7 +95,7 @@ Provides preset configuration for calculating prayer times.
 | `Dubai`                  | Used in UAE. Fajr 18.2°, Isha 18.2°, with 3 min offsets for sunrise, Dhuhr, Asr, Maghrib.                                       |
 | `Qatar`                  | Same Isha interval as UmmAlQura, Fajr 18°.                                                                                      |
 | `Kuwait`                 | Fajr 18°, Isha 17.5°.                                                                                                           |
-| `MoonsightingCommittee`  | Khalid Shaukat's method. Uses seasonal adjustments and 1/7 rule above 55° latitude. Recommended for North America and UK.        |
+| `MoonsightingCommittee`  | Khalid Shaukat's method. Seasonal twilight functions for Fajr/Isha, Sab'u Lail (1/7th of night) between 55–60°, and the committee's Zone C rules above 60°: the schedule anchors to ±60° during astronomical summer and otherwise substitutes the nearest latitude with normal days (Aqrabul-Bilaad) — resolving every day of the year at polar latitudes. Recommended for North America and UK. |
 | `Singapore`              | Used in Singapore, Malaysia, Indonesia. Fajr 20°, Isha 18°.                                                                      |
 | `Turkey`                 | Diyanet approximation. Less accurate outside Turkey.                                                                             |
 | `Tehran`                 | Institute of Geophysics, University of Tehran. Fajr 17.7°, Isha 14°, Maghrib at 4.5°.                                            |
@@ -115,14 +115,14 @@ Setting for Asr prayer time.
 
 ### HighLatitudeRule
 
-Fallback approximations for Fajr and Isha when the sun does not reach the required angle.
+Estimation methods for Fajr and Isha when the sun does not reach the required angle.
 
 | Value               | Description                                                                                                                          |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `MiddleOfTheNight`  | Fajr won't be earlier than the midpoint of the night; Isha won't be later. Prevents Fajr and Isha from crossing boundaries. Default. |
 | `SeventhOfTheNight` | The night is divided into seven equal parts. Isha begins after the first seventh; Fajr at the beginning of the last seventh. |
 | `TwilightAngle`     | The fajr/isha angle α determines a fraction t = α ÷ 60 of the night. Isha begins after the first t part; Fajr is calculated similarly. Example: 15° → t = 0.25 → Isha after the first quarter of the night. |
-| `LocalRelativeEstimation` | Scans the year to compute the average Isha proportion of the night from days where the angle is reachable, applied symmetrically to Fajr. Uses that proportion as fallback with ±5 min/day smoothing at transitions. Adopted by MWL Fiqh Council, August 2009. Recommended for Zone 2 (48.6–66.6°). |
+| `LocalRelativeEstimation` | Scans the year to compute the average Isha proportion of the night from days where the angle is reachable, applied symmetrically to Fajr. Uses that proportion as the estimation with ±5 min/day smoothing at transitions. Adopted by MWL Fiqh Council, August 2009. Recommended for Zone 2 (48.6–66.6°). |
 | `Recommended`       | Automatically selects the right rule: LocalRelativeEstimation for 48.6–66.6°, MiddleOfTheNight elsewhere. |
 
 **Defer to `try_new()`** — set the variant on `params`:
@@ -137,7 +137,7 @@ let rule = HighLatitudeRule::recommended(Coordinates::new(50.85, 4.35));
 
 ### PolarEstimation
 
-Estimation method for polar latitudes (>66.6°) where the sun may not rise or set for extended periods. All prayer times use the resolved (nearest/reference) latitude.
+Estimation method for polar latitudes (>66.6°) where the sun may not rise or set for extended periods. Prayer times are computed at the resolved latitude.
 
 | Value             | Description                                                                                                                                |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -221,12 +221,16 @@ let local_fajr = prayers.time(Prayer::Fajr).with_timezone(&Local);
 | `next()`              | `Prayer`            | The upcoming prayer.                             |
 | `next_at(now)`        | `Prayer`            | The prayer that begins next after a given instant. |
 | `time_remaining_at(now)` | `Duration`       | Exact time until the next prayer; negative once it has started. |
-| `resolved_latitude()` | `f64`               | Latitude actually used for solar calculations — the true latitude unless a `polar_estimation` fallback resolved a reference one. |
+| `reference_latitude()` | `f64`               | The reference latitude: the latitude every solar calculation runs at. Equals the true latitude unless a `polar_estimation` strategy, the Moonsighting Committee ±60° summer anchor, or its nearest-latitude substitute applies. |
 
 ```rust
 let remaining = prayers.time_remaining_at(Utc::now());
 println!("Next: {} in {:02}h {:02}m", prayers.next().name(), remaining.num_hours(), remaining.num_minutes() % 60);
 ```
+
+#### Errors
+
+`try_new()` returns `Err` when the solar model cannot produce a schedule at the given coordinates and date — polar day or night, an unreachable Asr shadow angle, or invalid input (non-finite coordinates, |latitude| > 90°).
 
 ### Prayer
 

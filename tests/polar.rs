@@ -199,10 +199,10 @@ fn tromso_summer_solstice_nearest_latitude() {
     );
 }
 
-/// Tromsø (70°N) on summer solstice with no fallback strategy:
+/// Tromsø (70°N) on summer solstice with no estimation method:
 /// try_new() should return an informative Err.
 #[test]
-fn tromso_summer_solstice_no_fallback_returns_error() {
+fn tromso_summer_solstice_no_estimation_returns_error() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
     let coordinates = Coordinates::new(70.0, 20.0);
     let mut params: Parameters = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
@@ -215,14 +215,14 @@ fn tromso_summer_solstice_no_fallback_returns_error() {
     assert_eq!(
         result.err(),
         Some("sunrise or sunset does not occur at this latitude on this date"),
-        "No fallback at polar day should name the real failure"
+        "No estimation at polar day should name the real failure"
     );
 }
 
 /// Tromsø (70°N) on spring equinox: try_new() succeeds because sunrise/sunset
-/// exist even at this latitude. No fallback needed.
+/// exist even at this latitude. No estimation needed.
 #[test]
-fn tromso_equinox_no_fallback_needed() {
+fn tromso_equinox_no_estimation_needed() {
     let date = NaiveDate::from_ymd_opt(2026, 3, 20).expect("valid date");
     let coordinates = Coordinates::new(70.0, 20.0);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
@@ -322,10 +322,10 @@ fn southern_polar_reference_45() {
     );
 }
 
-/// Non-polar control (Singapore 1.4°N, 103.8°E) with no fallback strategy:
+/// Non-polar control (Singapore 1.4°N, 103.8°E) with no estimation method:
 /// should behave identically — no polar issues.
 #[test]
-fn singapore_no_fallback() {
+fn singapore_no_estimation() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 21).expect("valid date");
     let coordinates = Coordinates::new(1.4, 103.8);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
@@ -334,7 +334,7 @@ fn singapore_no_fallback() {
 
     assert!(
         result.is_ok(),
-        "Non-polar should work with no fallback strategy: {:?}",
+        "Non-polar should work with no estimation method: {:?}",
         result.err()
     );
     let times = result.expect("already checked");
@@ -404,10 +404,10 @@ fn tromso_winter_nearest_latitude() {
     );
 }
 
-/// Tromsø (70°N) in winter: no fallback strategy should return an
+/// Tromsø (70°N) in winter: no estimation method should return an
 /// informative Err naming the missing sunrise/sunset.
 #[test]
-fn tromso_winter_no_fallback_returns_error() {
+fn tromso_winter_no_estimation_returns_error() {
     let date = NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid date");
     let coordinates = Coordinates::new(70.0, 20.0);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
@@ -416,14 +416,14 @@ fn tromso_winter_no_fallback_returns_error() {
     assert_eq!(
         result.err(),
         Some("sunrise or sunset does not occur at this latitude on this date"),
-        "No fallback at polar night should name the real failure"
+        "No estimation at polar night should name the real failure"
     );
 }
 
 /// 67°N on the winter solstice: sunrise/sunset exist, but the Asr shadow
 /// angle is geometrically unreachable — the error names the real failure.
 #[test]
-fn no_fallback_asr_unreachable_error_message() {
+fn no_estimation_asr_unreachable_error_message() {
     let date = NaiveDate::from_ymd_opt(2026, 12, 21).expect("valid date");
     let coordinates = Coordinates::new(67.0, 0.0);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
@@ -437,9 +437,9 @@ fn no_fallback_asr_unreachable_error_message() {
 }
 
 /// 66°N on the winter solstice: just below the unreachable-Asr window,
-/// everything works with no fallback configured.
+/// everything works with no estimation configured.
 #[test]
-fn no_fallback_below_asr_window_succeeds() {
+fn no_estimation_below_asr_window_succeeds() {
     let date = NaiveDate::from_ymd_opt(2026, 12, 21).expect("valid date");
     let coordinates = Coordinates::new(66.0, 0.0);
     let params = Configuration::with(Method::MuslimWorldLeague, Madhab::Shafi);
@@ -447,7 +447,7 @@ fn no_fallback_below_asr_window_succeeds() {
     let result = PrayerTimes::try_new(date, coordinates, params);
     assert!(
         result.is_ok(),
-        "66°N winter solstice should work without fallback: {:?}",
+        "66°N winter solstice should work without estimation: {:?}",
         result.err()
     );
 }

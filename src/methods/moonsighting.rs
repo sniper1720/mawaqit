@@ -5,8 +5,8 @@ use crate::astronomy::unit::Stride;
 use crate::models::rounding::Rounding;
 use crate::models::shafaq::Shafaq;
 
-/// Twilight adjustment based on observational data for use
-/// in the Moonsighting Committee calculation method.
+/// Fajr from the seasonal morning-twilight (dawn) function for the
+/// Moonsighting Committee method, applied to the given sunrise.
 pub fn season_adjusted_morning_twilight(
     latitude: f64,
     day: u32,
@@ -27,8 +27,8 @@ pub fn season_adjusted_morning_twilight(
         .expect("morning twilight adjustment overflowed")
 }
 
-/// Twilight adjustment based on observational data for use
-/// in the Moonsighting Committee calculation method.
+/// Isha from the seasonal evening-twilight (shafaq) function for the
+/// Moonsighting Committee method, applied to the given sunset.
 pub fn season_adjusted_evening_twilight(
     latitude: f64,
     day: u32,
@@ -50,7 +50,11 @@ pub fn season_adjusted_evening_twilight(
 
 /// Solstice calculation to determine a date's seasonal progression.
 ///
-/// Used in the Moonsighting Committee calculation method.
+/// Used in the Moonsighting Committee calculation method. Counts days
+/// forward from the solstice that anchors the seasonal function, matching
+/// the method's DYY definition: the December solstice for the northern
+/// hemisphere, the June solstice for the southern hemisphere (DYY = 0 at
+/// the solstice).
 pub fn days_since_solstice(day_of_year: u32, year: u32, latitude: f64) -> u32 {
     let days_in_year = if ops::is_leap_year(year) { 366 } else { 365 };
 
@@ -65,7 +69,11 @@ pub fn days_since_solstice(day_of_year: u32, year: u32, latitude: f64) -> u32 {
         }
     } else {
         let southern_offset = if ops::is_leap_year(year) { 173 } else { 172 };
-        (day_of_year - southern_offset) + days_in_year
+        if day_of_year >= southern_offset {
+            day_of_year - southern_offset
+        } else {
+            day_of_year + days_in_year - southern_offset
+        }
     }
 }
 
@@ -151,5 +159,31 @@ fn twilight_adjustment_values(
                 june_solstice: 75.0 + ((81.84 / 55.0) * latitude.abs()),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::days_since_solstice;
+
+    #[test]
+    fn days_since_solstice_matches_the_method_definition() {
+        // Northern hemisphere: DYY starts at the December solstice
+        // (DYY = 0 for December 21, counting forward).
+        assert_eq!(days_since_solstice(355, 2026, 60.0), 0); // Dec 21
+        assert_eq!(days_since_solstice(1, 2026, 60.0), 11); // Jan 1
+        assert_eq!(days_since_solstice(172, 2026, 60.0), 182); // Jun 21
+        assert_eq!(days_since_solstice(365, 2026, 60.0), 10); // Dec 31 (wraps the year boundary)
+
+        // Southern hemisphere: DYY starts at the June solstice
+        // (DYY = 0 for June 21, counting forward).
+        assert_eq!(days_since_solstice(172, 2026, -60.0), 0); // Jun 21
+        assert_eq!(days_since_solstice(355, 2026, -60.0), 183); // Dec 21
+        assert_eq!(days_since_solstice(1, 2026, -60.0), 194); // Jan 1, wraps before the offset
+        assert_eq!(days_since_solstice(171, 2026, -60.0), 364); // Jun 20, last day of the cycle
+
+        // Leap years shift the southern offset by one day.
+        assert_eq!(days_since_solstice(173, 2024, -60.0), 0); // Jun 21
+        assert_eq!(days_since_solstice(172, 2024, -60.0), 365); // Jun 20
     }
 }
